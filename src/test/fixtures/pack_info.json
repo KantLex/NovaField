@@ -1,0 +1,61 @@
+{
+  "NovaGhostRig": {
+    "input": {
+      "required": {
+        "camera_path": ["STRING", { "multiline": true }],
+        "width": ["INT", { "default": 512, "min": 64, "max": 4096, "step": 8 }],
+        "height": ["INT", { "default": 288, "min": 64, "max": 4096, "step": 8 }],
+        "style": [["stage", "subject", "starfield", "parallax"], {}],
+        "line_strength": ["FLOAT", { "default": 1.0, "min": 0.2, "max": 3.0 }]
+      },
+      "optional": { "image": ["IMAGE", {}], "depth": ["IMAGE", {}] }
+    },
+    "output": ["IMAGE", "INT"],
+    "output_name": ["frames", "frame_count"]
+  },
+  "NovaLensFilm": {
+    "input": {
+      "required": {
+        "images": ["IMAGE", {}],
+        "look": [["none", "kodak_2383", "fuji_eterna", "bleach_bypass", "teal_orange", "noir", "technicolor", "moonlight", "vhs_1989"], {}],
+        "intensity": ["FLOAT", { "default": 0.8, "min": 0, "max": 1 }],
+        "grain": ["FLOAT", { "default": 0.3, "min": 0, "max": 1 }],
+        "halation": ["FLOAT", { "default": 0.2, "min": 0, "max": 1 }],
+        "vignette": ["FLOAT", { "default": 0.2, "min": 0, "max": 1 }],
+        "chromatic": ["FLOAT", { "default": 0.0, "min": 0, "max": 1 }],
+        "gate_weave": ["FLOAT", { "default": 0.0, "min": 0, "max": 1 }],
+        "anamorphic_streak": ["FLOAT", { "default": 0.0, "min": 0, "max": 1 }],
+        "seed": ["INT", { "default": 0, "min": 0, "max": 2147483647 }]
+      }
+    },
+    "output": ["IMAGE"],
+    "output_name": ["images"]
+  },
+  "NovaBoxTrackMask": {
+    "input": {
+      "required": {
+        "track": ["STRING", { "multiline": true }],
+        "width": ["INT", { "default": 832, "min": 16, "max": 8192, "step": 8 }],
+        "height": ["INT", { "default": 480, "min": 16, "max": 8192, "step": 8 }],
+        "frames": ["INT", { "default": 81, "min": 1, "max": 4096 }],
+        "feather": ["FLOAT", { "default": 0.08, "min": 0, "max": 0.5 }],
+        "expand": ["FLOAT", { "default": 0.05, "min": 0, "max": 0.5 }]
+      },
+      "optional": { "images": ["IMAGE", {}] }
+    },
+    "output": ["MASK", "IMAGE"],
+    "output_name": ["mask", "masked_images"]
+  },
+  "NovaContactSheet": {
+    "input": {
+      "required": {
+        "images": ["IMAGE", {}],
+        "columns": ["INT", { "default": 4, "min": 1, "max": 16 }],
+        "count": ["INT", { "default": 8, "min": 1, "max": 64 }],
+        "cell_width": ["INT", { "default": 320, "min": 32, "max": 2048 }]
+      }
+    },
+    "output": ["IMAGE"],
+    "output_name": ["sheet"]
+  }
+}

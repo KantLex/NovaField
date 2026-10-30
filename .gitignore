@@ -1,0 +1,36 @@
+# macOS
+.DS_Store
+._*
+
+# Env
+.env
+.env*.local
+
+# Dependencies / build
+node_modules/
+dist/
+.next/
+
+# Next.js
+/.pnp
+.pnp.*
+/coverage
+/.next/
+/out/
+/build
+*.pem
+npm-debug.log*
+.pnpm-debug.log*
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+
+# NovaField local data (job history, downloaded renders)
+/data/
+
+# Browser tests
+/.next-e2e/
+/test-results/
+/playwright-report/
+
+!.env.example
