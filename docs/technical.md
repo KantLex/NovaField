@@ -171,6 +171,23 @@ exact** renders the paused frame through the real node (`src/server/gradePreview
 The browser measures its Lab statistics (`src/ui/grade/labOf.ts`, `src/lib/cinema/match.ts`) for
 the preview; the node measures them again on the GPU.
 
+### Henshin (`src/ui/henshin`, `src/lib/engines/autotrack.ts`)
+
+**Which part of a clip.** A clip for H3 (Recast, Restyle) or Wan (Replace) is cut down from its
+original on upload, and the asset keeps `source`: the original's URL, its length and where the
+part starts. The trim bar moves that part; `POST /api/trim` cuts it again from the original
+(ffmpeg seeks to the start), up to 15 s for H3 and 81 frames at 16 fps for Wan, at least 2.4 s.
+
+**Track.** In Replace, one box is enough: the browser reads the clip's frames small (256 px wide)
+and follows the box both ways from the frame it was drawn on. It matches colour patches by
+normalised cross-correlation, weighted to the middle of the box so the background counts less,
+near where the object last was and at a few sizes. It calls the object lost when the match falls
+too low, or when it no longer looks like what was boxed. The path is smoothed and reduced to the
+fewest keyframes that `NovaBoxTrackMask`'s smoothstep retraces within 1.5% of the frame.
+
+**Compare.** A Henshin take plays with its source (or the still it animated) under a divider,
+kept on the same frame as the take.
+
 ### Shot QC (`src/server/qc.ts`, `src/lib/qc.ts`, `src/ui/Qc.tsx`)
 
 1. `checkTake` uploads the take's MP4 to ComfyUI as `nf_qc_<id>.mp4` and queues

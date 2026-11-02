@@ -55,9 +55,10 @@ export async function probe(file: string): Promise<Probe> {
 
 const ffmpeg = (args: string[]) => run(FFMPEG, ["-hide_banner", "-loglevel", "error", "-y", ...args], { maxBuffer: 1 << 26 });
 
-/** H3 reference video: 24 fps, ≤ 15 s, cut to a valid 17k+5 frame count, long edge ≤ 1280. */
-export async function conformForH3(input: string, output: string, frames: number) {
+/** H3 reference video: 24 fps, ≤ 15 s, cut to a valid 17k+5 frame count, long edge ≤ 1280, from `start` seconds in. */
+export async function conformForH3(input: string, output: string, frames: number, start = 0) {
   await ffmpeg([
+    ...(start > 0 ? ["-ss", String(start)] : []),
     "-i", input,
     "-vf", "fps=24,scale='if(gt(iw,ih),min(1280,iw),-2)':'if(gt(iw,ih),-2,min(1280,ih))':flags=lanczos,scale=trunc(iw/2)*2:trunc(ih/2)*2",
     "-frames:v", String(frames),
@@ -73,9 +74,10 @@ export async function stillsToVideo(dir: string, fps: number, output: string) {
   await ffmpeg(["-framerate", String(fps), "-i", path.join(dir, "%04d.jpg"), "-c:v", "libx264", "-crf", "16", "-pix_fmt", "yuv420p", "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", output]);
 }
 
-/** Wan source: 16 fps, exactly width×height (cover crop), `frames` frames. */
-export async function conformForWan(input: string, output: string, width: number, height: number, frames: number) {
+/** Wan source: 16 fps, exactly width×height (cover crop), `frames` frames, from `start` seconds in. */
+export async function conformForWan(input: string, output: string, width: number, height: number, frames: number, start = 0) {
   await ffmpeg([
+    ...(start > 0 ? ["-ss", String(start)] : []),
     "-i", input,
     "-vf", `fps=16,scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos,crop=${width}:${height}`,
     "-frames:v", String(frames),

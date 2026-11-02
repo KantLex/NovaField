@@ -22,9 +22,10 @@ export class IngestError extends Error {}
 
 /**
  * `original` is a file the app already has (an upload, or an asset's stored original); `fileName`
- * and `mime` are what the person gave it. `url` is how the browser shows that original.
+ * and `mime` are what the person gave it. `url` is how the browser shows that original. A clip for
+ * H3 or Wan is cut from `part.start` seconds into it (default the start), at most `part.seconds` long.
  */
-export async function ingest(original: string, fileName: string, mime: string, purpose: Purpose, url: string): Promise<Asset> {
+export async function ingest(original: string, fileName: string, mime: string, purpose: Purpose, url: string, part: { start?: number; seconds?: number } = {}): Promise<Asset> {
   await ensureDirs();
   const uid = randomUUID().slice(0, 10);
   const ext = path.extname(original).toLowerCase();
@@ -62,19 +63,23 @@ export async function ingest(original: string, fileName: string, mime: string, p
   const src = await probe(original);
   if (!src.width) throw new IngestError(say("That file has no video track."));
   const out = path.join(dirs.uploads, `${uid}_${purpose}.mp4`);
+  // The part used: from `start`, as long as asked for and the clip has left. A start runs no later
+  // than leaves 2.4 s, the shortest part both models take (H3's 56 frames, Wan's 33).
+  const start = Math.min(Math.max(0, part.start ?? 0), Math.max(0, src.duration - 2.4));
+  const span = Math.min(src.duration - start, part.seconds ?? Infinity);
   let frames: number;
   let fps: number;
   if (purpose === "h3") {
-    frames = h3FramesAtMost(Math.min(Math.floor(src.duration * 24), 360));
+    frames = h3FramesAtMost(Math.min(Math.floor(span * 24), 360));
     fps = 24;
     if (frames < 48) throw new IngestError(say("Use a clip of at least 2 seconds."));
-    await conformForH3(original, out, frames);
+    await conformForH3(original, out, frames, start);
   } else {
     const { width, height } = planWan(nearestAspect(src.width, src.height));
     fps = 16;
-    frames = Math.min(81, Math.floor((Math.floor(src.duration * 16) - 1) / 4) * 4 + 1);
+    frames = Math.min(81, Math.floor((Math.floor(span * 16) - 1) / 4) * 4 + 1);
     if (frames < 33) throw new IngestError(say("Use a clip of at least 2 seconds."));
-    await conformForWan(original, out, width, height, frames);
+    await conformForWan(original, out, width, height, frames, start);
   }
   const p = await probe(out);
   await poster(out, path.join(dirs.uploads, `${uid}_${purpose}.jpg`), 0.2).catch(() => {});
@@ -89,6 +94,7 @@ export async function ingest(original: string, fileName: string, mime: string, p
     frames,
     duration: frames / fps,
     label: labelFrom(file.name),
+    source: { url, duration: src.duration, start },
   };
   return asset;
 }

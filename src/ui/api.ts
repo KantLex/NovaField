@@ -71,6 +71,9 @@ export const api = {
     form.append("fps", String(fps));
     return request<Asset>("/api/guide", { body: form });
   },
+  /** Another part of a clip for Henshin, cut again from its original. */
+  trim: (clip: Asset, purpose: "h3" | "wan", start: number, seconds?: number) =>
+    request<Asset>("/api/trim", { json: { url: clip.source?.url, purpose, start, seconds, label: clip.label } }),
   upload: (file: File, purpose: Purpose) => {
     const form = new FormData();
     form.append("file", file);

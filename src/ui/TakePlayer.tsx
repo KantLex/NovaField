@@ -3,7 +3,7 @@
 // A finished take on screen: its video (with the ghost rig or previs it was made from laid over it), picture, sound or 3D model.
 
 import clsx from "clsx";
-import { Ghost, ImageDown, Pause, Play, Volume2, VolumeX } from "lucide-react";
+import { Columns2, Ghost, ImageDown, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { InspectButton, Inspector } from "./Inspector";
 import { useEffect, useRef, useState } from "react";
@@ -17,6 +17,7 @@ import { PICTURE_TARGETS, sendTakePicture } from "./sendTo";
 import { tr } from "@/i18n";
 import { PrevisPip } from "@/ui/MonitorOverlays";
 import { ModelTake } from "./ModelTake";
+import { beforeOf, CompareWipe } from "./CompareWipe";
 
 export function TakePlayer({ job, autoPlay = true, onRatio }: { job: Job; autoPlay?: boolean; onRatio?: (ratio: number) => void }) {
   const [inspecting, setInspecting] = useState(false);
@@ -59,7 +60,9 @@ export function VideoTake({ job, autoPlay, onRatio }: { job: Job; autoPlay: bool
   const [t, setT] = useState(0);
   const [dur, setDur] = useState(job.meta?.seconds ?? 0);
   const [ghost, setGhost] = useState(false);
+  const [comparing, setComparing] = useState(false);
   const [inspecting, setInspecting] = useState(false);
+  const before = beforeOf(job);
   const fps = job.meta?.fps ?? 24;
   const path = asPath(job.meta?.cameraPath);
   // Shot QC's faults jump the player to where they happen.
@@ -120,6 +123,21 @@ export function VideoTake({ job, autoPlay, onRatio }: { job: Job; autoPlay: bool
       />
       {ghost && path && <GhostOverlay video={v} path={path} />}
       {ghost && previsClip && <PrevisPip video={v} src={previsClip} />}
+      {comparing && before && <CompareWipe video={v} before={before} />}
+      {before && (
+        // A Henshin take beside what it was made from, at the same moment.
+        <button
+          onClick={() => setComparing((c) => !c)}
+          aria-pressed={comparing}
+          title={tr("Before and after: drag the line across the picture")}
+          className={clsx(
+            "absolute top-2 left-2 flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] backdrop-blur transition-colors",
+            comparing ? "bg-tungsten font-semibold text-black" : "bg-black/60 text-ink/90 hover:bg-black/80 hover:text-ink",
+          )}
+        >
+          <Columns2 size={14} /> {tr("Compare")}
+        </button>
+      )}
       {(path || previsClip) && (
         // Always visible (not in the hover bar): the quickest way to check a take against its plan.
         <button

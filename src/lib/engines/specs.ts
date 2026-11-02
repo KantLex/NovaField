@@ -24,6 +24,8 @@ export interface Asset {
   duration?: number;
   fps?: number;
   frames?: number;
+  /** For a clip cut down for a model: the whole original, and where in it this part starts, to choose another part. */
+  source?: { url: string; duration: number; start: number };
 }
 
 export interface FilmLab {

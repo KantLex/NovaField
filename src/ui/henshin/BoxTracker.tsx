@@ -1,16 +1,19 @@
 "use client";
 
 import clsx from "clsx";
-import { ChevronFirst, ChevronLast, Diamond, Eraser, Eye, EyeOff, Pause, Play, Redo2, StepBack, StepForward, Trash2, Undo2 } from "lucide-react";
+import { ChevronFirst, ChevronLast, Crosshair, Diamond, Eraser, Eye, EyeOff, Pause, Play, Redo2, StepBack, StepForward, Trash2, Undo2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { timecode } from "@/lib/engines/sizing";
 import type { Asset, BoxKey } from "@/lib/engines/specs";
+import { keysFromTrack, trackBox, type Pic } from "@/lib/engines/autotrack";
 import { boxAt, clampBox, putKey, retimeKey } from "@/lib/engines/tracks";
+import { fail } from "../api";
 import { tr } from "@/i18n";
 import { IconButton } from "../controls";
 import { useHotkeys } from "../hotkeys";
 import { useHistory } from "../useHistory";
 import { Box, HANDLES, Handle, MaskView, ToolButton, resize } from "@/ui/henshin/boxParts";
+import { clipFrames } from "@/ui/henshin/clipFrames";
 
 const HISTORY = 60;
 
@@ -22,6 +25,7 @@ type Gesture =
  * Scrub the clip and box the thing to replace. Drag inside the box to move it, its handles to
  * resize it, or outside to draw a new one: each change sets a keyframe on that frame, and
  * NovaBoxTrackMask eases between keyframes on the GPU. Keyframes drag along the timeline to retime.
+ * Track follows the box from this frame through the clip and sets the keyframes itself.
  */
 export function BoxTracker({
   source,
@@ -49,6 +53,10 @@ export function BoxTracker({
   const [dragKey, setDragKey] = useState<{ from: number; to: number } | null>(null);
   const [mask, setMask] = useState(false);
   const history = useHistory(keys, onKeys, HISTORY);
+  // Tracking: how far along (0–1) while it runs, what it found, and the clip's frames once read.
+  const [tracking, setTracking] = useState<number | null>(null);
+  const [trackNote, setTrackNote] = useState<string | null>(null);
+  const pics = useRef<{ url: string; frames: Pic[] } | null>(null);
 
   useEffect(() => {
     const v = video.current;
@@ -88,6 +96,41 @@ export function BoxTracker({
   const nextKey = sorted.find((k) => k.f > frame);
   const keyHere = (b: Box) => commit(putKey(keys, { ...clampBox(b), f: frame }));
 
+  /** Follow the box on this frame through the clip, both ways, and key the path it took. */
+  const track = async () => {
+    if (!shown || tracking !== null) return;
+    video.current?.pause();
+    const start = frame;
+    const from = clampBox(shown);
+    setTracking(0);
+    setTrackNote(null);
+    try {
+      let all = pics.current?.url === source.url ? pics.current.frames : null;
+      if (!all) {
+        all = await clipFrames(source.url, frames, fps, 256, (p) => setTracking(p * 0.85));
+        pics.current = { url: source.url, frames: all };
+      }
+      setTracking(0.9);
+      await new Promise((r) => setTimeout(r, 0));
+      const { boxes, lost } = trackBox(all, start, from);
+      const found = keysFromTrack(boxes);
+      // The new path replaces the keys over the stretch it covers; boxes set beyond it stay.
+      const lo = found[0]?.f ?? start;
+      const hi = found.at(-1)?.f ?? start;
+      commit([...keys.filter((k) => k.f < lo || k.f > hi), ...found].sort((a, b) => a.f - b.f));
+      const at = lost.after ?? lost.before;
+      if (at !== undefined) {
+        // Show where it went, ready to box it again there.
+        seek(at);
+        setTrackNote(tr("Lost it at {time}. Box it there and press Track again.", { time: timecode(at, fps) }));
+      } else setTrackNote(tr("Followed it through the whole clip with {n} keyframes. Scrub to check; move the box on any frame that's off.", { n: found.length }));
+    } catch (e) {
+      fail(e);
+    } finally {
+      setTracking(null);
+    }
+  };
+
   useHotkeys((e) => {
     const mod = e.metaKey || e.ctrlKey;
     if (mod && e.key.toLowerCase() === "z") {
@@ -118,6 +161,9 @@ export function BoxTracker({
       case "m":
       case "M":
         return setMask((m) => !m);
+      case "t":
+      case "T":
+        return void track();
       case "Delete":
       case "Backspace":
         if (!isKey) return;
@@ -294,6 +340,9 @@ export function BoxTracker({
         <ToolButton onClick={() => commit(keys.filter((k) => k.f !== frame))} disabled={!isKey} title={tr("Delete this keyframe (Delete)")} danger>
           <Trash2 size={12} /> {tr("Delete")}
         </ToolButton>
+        <ToolButton onClick={() => void track()} disabled={!shown || tracking !== null} title={tr("Follow the box from this frame through the whole clip (T)")}>
+          <Crosshair size={12} /> {tracking !== null ? tr("Tracking {pct}%", { pct: Math.round(tracking * 100) }) : tr("Track")}
+        </ToolButton>
         <ToolButton onClick={() => setMask((m) => !m)} pressed={mask} title={tr("Show the area the GPU repaints (M)")}>
           {mask ? <EyeOff size={12} /> : <Eye size={12} />} {tr("Mask")}
         </ToolButton>
@@ -309,8 +358,9 @@ export function BoxTracker({
         </ToolButton>
       </div>
       <p className="text-[12px] text-faint">
+        {trackNote && <span className="mr-1 text-ink/85">{trackNote}</span>}
         {keys.length === 0
-          ? tr("One box is enough for something that stays put.")
+          ? tr("Box it on one frame, then Track follows it through the clip. One box is enough for something that stays put.")
           : keys.length === 1
             ? tr("Moves? Go to another moment and move or resize the box; each change sets a keyframe.")
             : tr("{n} keyframes. The dashed line is the box's path; drag the diamonds to retime.", { n: keys.length })}

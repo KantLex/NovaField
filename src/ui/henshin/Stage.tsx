@@ -9,6 +9,7 @@ import type { Asset } from "@/lib/engines/specs";
 import { Drop } from "@/ui/Drop";
 import { BoxTracker } from "@/ui/henshin/BoxTracker";
 import { PathPainter } from "@/ui/henshin/PathPainter";
+import { TrimBar } from "@/ui/henshin/TrimBar";
 import { tr } from "@/i18n";
 import { useG } from "@/ui/henshin/state";
 
@@ -36,18 +37,27 @@ export function Stage() {
     );
   }
   if (g.mode === "replace") {
-    if (!g.wanSource) return <BigDrop purpose="wan" accept="video/*" label={tr("Drop a clip (the first 5 s are used)")} onAsset={(wanSource) => g.set({ wanSource, keys: [] })} />;
+    if (!g.wanSource) return <BigDrop purpose="wan" accept="video/*" label={tr("Drop a clip (you choose which 5 s to use)")} onAsset={(wanSource) => g.set({ wanSource, keys: [] })} />;
     return (
       <div className="flex flex-col gap-2">
         <BoxTracker key={g.wanSource.url || g.wanSource.name} source={g.wanSource} keys={g.keys} shape={g.shape} onKeys={(keys) => g.set({ keys })} />
+        <TrimBar
+          clip={g.wanSource}
+          purpose="wan"
+          max={81 / 16}
+          fixed
+          warn={g.keys.length ? tr("Another part of the clip clears your box track. Go ahead?") : undefined}
+          onClip={(wanSource) => g.set({ wanSource, keys: [] })}
+        />
         <SwapButton label={tr("Use another clip")} onClick={() => g.set({ wanSource: undefined, keys: [] })} />
       </div>
     );
   }
-  if (!g.h3Source) return <BigDrop purpose="h3" accept="video/*" label={tr("Drop a clip, 2 to 15 seconds")} onAsset={(h3Source) => g.set({ h3Source })} />;
+  if (!g.h3Source) return <BigDrop purpose="h3" accept="video/*" label={tr("Drop a clip (you choose up to 15 s of it)")} onAsset={(h3Source) => g.set({ h3Source })} />;
   return (
     <div className="flex flex-col gap-2">
       <video src={g.h3Source.url} className="w-full rounded-[3px] bg-black" style={{ aspectRatio: `${g.h3Source.width}/${g.h3Source.height}` }} controls loop muted playsInline />
+      <TrimBar clip={g.h3Source} purpose="h3" max={15} onClip={(h3Source) => g.set({ h3Source })} />
       <div className="flex items-center justify-between text-[12px] text-dim">
         <span className="readout text-[13px]">
           {g.h3Source.width}×{g.h3Source.height}, {g.h3Source.duration?.toFixed(1)} s at 24 fps

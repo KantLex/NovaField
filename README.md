@@ -274,8 +274,10 @@ seed. When a picture is right, **Animate this picture** sends it to Studio as a 
 
 - **Recast:** swap the person in a clip for your character, keeping the motion and camera.
 - **Restyle:** re-render a clip shot for shot in a new look.
-- **Replace:** draw a box around an object at a few moments; NovaField tracks it and swaps it
-  for something else.
+- **Replace:** draw a box around an object once and press **Track**: NovaField follows it through
+  the clip and swaps it for something else. Fix the box on any frame where it's off.
+- **Choose the part:** drop a long clip and drag the trim bar to pick the seconds to use.
+- **Compare:** on a finished take, drag a line across the picture to see before and after.
 - **Motion paths:** draw curves on a still and it moves along them, each path with its own timing,
   or move the whole frame like a camera.
 
