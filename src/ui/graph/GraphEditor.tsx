@@ -17,6 +17,7 @@ import { Palette, type Need, type PaletteEntry } from "./Palette";
 import { useGraphPointer } from "./pointer";
 import { useViewport } from "./viewport";
 import { curve, outPos, wiresOf, type Rows } from "./wires";
+import { ask } from "@/ui/ask";
 import { tr } from "@/i18n";
 
 const mod = (e: { metaKey: boolean; ctrlKey: boolean }) => e.metaKey || e.ctrlKey;
@@ -257,8 +258,8 @@ export function GraphEditor({ recipeId, fields, onSaved, onDirty }: { recipeId: 
       setSaving(false);
     }
   };
-  const discard = () => {
-    if (!dirty || !confirm(tr("Throw away the changes since the last save?"))) return;
+  const discard = async () => {
+    if (!dirty || !(await ask(tr("Throw away the changes since the last save?"), { ok: "Discard", danger: true }))) return;
     const d = JSON.parse(baseline) as Doc;
     record(docRef.current!);
     setDoc(d);

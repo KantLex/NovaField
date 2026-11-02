@@ -69,6 +69,8 @@ export interface ShotFill {
   seed: number;
   firstFrame?: string;
   cast: string[];
+  /** Clips for its video inputs, in order (Henshin's source). */
+  videos?: string[];
 }
 
 /**
@@ -95,6 +97,11 @@ export function fillForShot(recipe: Recipe, shot: ShotFill): { values: Values; n
         ? say("This workflow takes one picture; the rest of the cast is left out.")
         : say("This workflow takes {n} pictures; the rest of the cast is left out.", { n: images.length }),
     );
+
+  const videos = by("video");
+  (shot.videos ?? []).forEach((v, i) => {
+    if (videos[i]) values[videos[i].id] = v;
+  });
 
   for (const f of by("seed")) values[f.id] = shot.seed % Math.min(f.max ?? 2 ** 47, 2 ** 47);
 

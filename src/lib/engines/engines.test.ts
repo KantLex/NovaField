@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import serverInfo from "../../test/fixtures/object_info.min.json";
 import packInfo from "../../test/fixtures/pack_info.json";
+import henshinInfo from "../../test/fixtures/henshin_models_info.json";
 import { validateGraph, type ObjectInfo } from "../comfy/validate";
-import { detectCapabilities } from "./capabilities";
+import { detectCapabilities, MODELS } from "./capabilities";
 import { NEWER_STOCK_NOTE, RIG_OFF_NOTE } from "./h3";
-import { compile } from "./index";
+import { HENSHIN_MODELS } from "./henshinModels";
+import { blocker, compile } from "./index";
 import { h3Frames, h3FramesAtMost, planH3 } from "./sizing";
 import { composeShotPrompt, resolveMentions } from "./prompt";
 import { resamplePath } from "./wan";
@@ -97,6 +99,15 @@ describe("compiled graphs validate against the home server's node list", () => {
     expect(meta.cameraPath).toBeUndefined();
     expect(meta.previs).toBe("/p.mp4");
     expect(withClip("action").meta.prompt).toContain("placed and move exactly as in <Video 1>");
+  });
+
+  it("recasts the person picked on the frame, by where they stand, and leaves everyone else", () => {
+    const recast = (target?: { x: number; y: number; t: number }) =>
+      compile({ kind: "recast", source: vid("test.mp4", 130), target, character: img("cast_a.png"), extras: [], notes: "", audio: "original", quality: "draft", seed: 1 }, detectCapabilities(withoutPack)).meta.prompt;
+    expect(recast()).toMatch(/^<Picture 1> replaces the main person in <Video 1>\./);
+    expect(recast({ x: 0.2, y: 0.5, t: 0 })).toMatch(/^<Picture 1> replaces the person on the left of the frame in <Video 1>; everyone else in it stays exactly as they are\./);
+    expect(recast({ x: 0.8, y: 0.5, t: 2.25 })).toMatch(/the person on the right of the frame \(as seen at 2\.3 s\)/);
+    expect(recast({ x: 0.5, y: 0.5, t: 0.2 })).toMatch(/the person in the middle of the frame in/);
   });
 
   it("a recast direction may change the scene, and without one the background is kept", () => {
@@ -334,5 +345,82 @@ describe("motion paths", () => {
     expect(pts).toHaveLength(81);
     expect(pts[0]).toEqual({ x: 0, y: 0 });
     expect(pts[80]).toEqual({ x: 832, y: 0 });
+  });
+});
+
+/** The home server and pack, plus the nodes and files of Henshin's other models, as if all were installed. */
+function withModels(): ObjectInfo {
+  const info = structuredClone({ ...withPack, ...(henshinInfo as unknown as ObjectInfo) });
+  const add = (node: string, input: string, ...files: string[]) => {
+    const spec = info[node].input.required![input];
+    spec[0] = [...(spec[0] as string[]), ...files];
+  };
+  add("UNETLoader", "unet_name", MODELS.scail, MODELS.wanAti);
+  add("LoraLoaderModelOnly", "lora_name", MODELS.scailDpo, MODELS.wanI2vDistill);
+  add("CheckpointLoaderSimple", "ckpt_name", MODELS.sam3);
+  add("ModelPatchLoader", "name", MODELS.h3FunControl);
+  return info;
+}
+
+describe("Henshin models", () => {
+  const all = withModels();
+  const caps = detectCapabilities(all);
+  const h3Clip = vid("h3.mp4", 124);
+  const wanClip = vid("wan.mp4", 81, 832, 480, 16);
+  const keys = [{ f: 0, x: 0.4, y: 0.3, w: 0.2, h: 0.4 }];
+  const types = (graph: object) => Object.values(graph).map((n) => (n as { class_type: string }).class_type);
+  const specs: [string, JobSpec][] = [
+    ["recast on SCAIL-2", { kind: "recast", model: "scail", source: wanClip, character: img("cast_a.png"), extras: [], notes: "", audio: "original", quality: "draft", seed: 1 }],
+    ["restyle on VACE", { kind: "restyle", model: "vace", source: wanClip, styleRef: img("ref.png"), style: "claymation", film, filmOnGpu: true, audio: "original", quality: "draft", seed: 1 }],
+    ["replace on H3", { kind: "replace", model: "h3-control", source: h3Clip, shape: "ellipse", keys, replacement: img("ref.png"), prompt: "a golden retriever", quality: "studio", seed: 3 }],
+    ["motion paths on ATI", { kind: "paths", model: "ati", image: img("start.png"), paths: [[{ x: 0.2, y: 0.5 }, { x: 0.8, y: 0.4 }]], prompt: "", aspect: "16:9", seed: 9 }],
+  ];
+
+  it("finds the other models when their nodes and files are there, and only then", () => {
+    expect(caps).toMatchObject({ scail: true, scailFast: true, h3FunControl: true, ati: true });
+    expect(detectCapabilities(withPack)).toMatchObject({ scail: false, h3FunControl: false, ati: false });
+  });
+
+  it.each(specs)("%s validates against the server's nodes", (_, spec) => {
+    const { graph, meta } = compile(spec, caps);
+    expect(validateGraph(graph, all)).toEqual([]);
+    expect(meta.frames).toBeGreaterThan(0);
+    expect(blocker(spec, caps)).toBeNull();
+  });
+
+  it("each runs on its own model", () => {
+    const run = (i: number) => compile(specs[i][1], caps);
+    expect(types(run(0).graph)).toEqual(expect.arrayContaining(["WanSCAILToVideo", "SCAIL2ColoredMask", "SAM3_VideoTrack"]));
+    expect(run(0).meta).toMatchObject({ engine: "SCAIL-2 14B + distill", width: 832, height: 480, fps: 16 });
+    expect(types(run(1).graph)).toEqual(expect.arrayContaining(["Canny", "WanVaceToVideo", "NovaLensFilm"]));
+    expect(run(1).meta.engine).toContain("Wan 2.1 VACE");
+    expect(types(run(2).graph)).toEqual(expect.arrayContaining(["MiniMaxH3FunControlNetApply", "NovaBoxTrackMask", "MiniMaxH3ReferenceToVideo"]));
+    expect(run(2).meta).toMatchObject({ fps: 24, width: 1280 });
+    expect(run(2).meta.prompt).toContain("a golden retriever, looking like <Picture 1>");
+    const ati = Object.values(run(3).graph).find((n) => (n as { class_type: string }).class_type === "WanTrackToVideo") as { inputs: Record<string, unknown> };
+    expect(ati.inputs.topk).toBe(10);
+    expect(types(run(3).graph)).not.toContain("WanMoveTrackToVideo");
+  });
+
+  it("SCAIL-2 cuts the clip to its 32-pixel steps and says what it can't do", () => {
+    const spec: JobSpec = { kind: "recast", model: "scail", source: vid("sq.mp4", 81, 624, 624, 16), target: { x: 0.2, y: 0.5, t: 1 }, character: img("a.png"), extras: [img("b.png")], notes: "", audio: "generated", quality: "draft", seed: 1 };
+    const { meta } = compile(spec, caps);
+    expect([meta.width, meta.height]).toEqual([608, 608]);
+    expect(meta.notes.join(" ")).toMatch(/biggest person.*one character picture.*no sound/);
+  });
+
+  it("without a model's files, says which files are missing", () => {
+    const bare = detectCapabilities(withPack);
+    expect(blocker(specs[0][1], bare)).toContain(MODELS.scail);
+    expect(blocker(specs[3][1], bare)).toContain(MODELS.wanAti);
+    // The defaults still run there.
+    expect(blocker({ ...(specs[1][1] as JobSpec & { kind: "restyle" }), model: undefined, source: h3Clip }, bare)).toBeNull();
+  });
+
+  it("recommends two models for every mode, the default first", () => {
+    for (const list of Object.values(HENSHIN_MODELS)) {
+      expect(list.filter((m) => m.recommended)).toHaveLength(2);
+      expect(new Set(list.map((m) => m.id)).size).toBe(list.length);
+    }
   });
 });

@@ -171,9 +171,41 @@ exact** renders the paused frame through the real node (`src/server/gradePreview
 The browser measures its Lab statistics (`src/ui/grade/labOf.ts`, `src/lib/cinema/match.ts`) for
 the preview; the node measures them again on the GPU.
 
-### Henshin (`src/ui/henshin`, `src/lib/engines/autotrack.ts`)
+### Henshin (`src/ui/henshin`, `src/lib/engines/autotrack.ts`, `src/lib/engines/henshinModels.ts`)
 
-**Which part of a clip.** A clip for H3 (Recast, Restyle) or Wan (Replace) is cut down from its
+**Which model.** `HENSHIN_MODELS` lists the models for each mode, the first being the default, and
+marks two recommended. A spec carries `model` (`h3` or `scail` for Recast, `h3` or `vace` for
+Restyle, `vace` or `h3-control` for Replace, `wanmove` or `ati` for Motion paths); `compile` routes
+on it and `blocker` names the files a missing model needs. Each model says which clip it takes:
+H3's (24 fps, up to 15 s) or Wan's (16 fps, 81 frames). Choosing a model that takes the other
+kind cuts the same part of the same original again through `POST /api/trim`, and in Replace moves
+the box keyframes to the same moments at the new rate. The page keeps the choice per mode
+(`models` in `novafield-henshin`); agents pass `model` to the four Henshin tools and `--model` on
+the command line, and `list_engines` lists the models with what each needs.
+
+- **SCAIL-2 Recast** (`compileRecastScail`): SAM 3.1 tracks the people in the clip and in the
+  character picture, `SCAIL2ColoredMask` colours them to match, and `WanSCAILToVideo` swaps the
+  biggest person in replacement mode, in one 81-frame chunk at 32-pixel steps. Six steps with the
+  I2V distill LoRA when the server has it, otherwise 40.
+- **VACE Restyle** (`compileRestyleVace`): Canny edges of every frame are the control video; the
+  words and the style picture set the look, and the film stock grades it as on H3.
+- **H3 Replace** (`compileReplaceH3`): `MiniMaxH3FunControlNetApply` repaints only inside the
+  `NovaBoxTrackMask` mask over the source frames; reference-to-video draws what goes there.
+- **ATI Motion paths**: the same per-frame points go to `WanTrackToVideo` as text.
+
+The Wan models make no sound, so "New" sound is only offered on H3.
+
+**Your own workflow.** An imported workflow can run a mode when `workflowFits` says it takes the
+mode's footage: it makes video from a prompt and has a video field (Recast also needs an image
+field; Motion paths needs only an image field). The page stores it as `wf:<id>`, and the spec
+carries `engine` like a Studio shot, so `recipeIdOf`, the blocker, pricing and the credit guard
+work as for any workflow. `compileRecipeHenshin` puts H3's clip in the first video field, the
+pictures in the image fields, and the instructions in the prompt in plain words; a box track or
+drawn paths are described there too, with a note. Sound, quality and the film stock are left to
+the workflow. Agents pass `workflow` (MCP) or `--engine` (CLI); `list_engines` lists each
+workflow's `henshin` modes.
+
+**Which part of a clip.** A clip for H3 or Wan (whichever the mode's model takes) is cut down from its
 original on upload, and the asset keeps `source`: the original's URL, its length and where the
 part starts. The trim bar moves that part; `POST /api/trim` cuts it again from the original
 (ffmpeg seeks to the start), up to 15 s for H3 and 81 frames at 16 fps for Wan, at least 2.4 s.
@@ -184,6 +216,12 @@ normalised cross-correlation, weighted to the middle of the box so the backgroun
 near where the object last was and at a few sizes. It calls the object lost when the match falls
 too low, or when it no longer looks like what was boxed. The path is smoothed and reduced to the
 fewest keyframes that `NovaBoxTrackMask`'s smoothstep retraces within 1.5% of the frame.
+
+**Who to recast.** Click a person on a frame of the source and the spec carries `target` (where,
+0–1, and when, in seconds). The prompt names them by where they stand ("the person on the right of
+the frame, as seen at 2.5 s") and keeps everyone else; without a target it's the main person.
+**Restyle presets** (`RESTYLES` in `src/lib/cinema/looks.ts`) fill the style words and a film
+stock that suits them; both stay editable.
 
 **Compare.** A Henshin take plays with its source (or the still it animated) under a divider,
 kept on the same frame as the take.
@@ -246,8 +284,11 @@ The file names the app looks for (`src/lib/engines/capabilities.ts`):
 | Feature | Files |
 |---|---|
 | MiniMax H3 shots | `minimax_h3_fl2va_pruned_int8_convrot`, `minimax_h3_ref2va_pruned_int8_convrot`, Turbo LoRAs `minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16` and `minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16`, `qwen3vl_32b_minimax_h3_nvfp4_awq`, `minimax_h3_video_vae_fp16`, `minimax_h3_audio_vae_fp32` |
-| Wan (Recast, Restyle, Replace) | `wan2.1_vace_14B_fp16`, `umt5_xxl_fp8_e4m3fn_scaled`, `wan_2.1_vae`, `Wan21_CausVid_14B_T2V_lora_rank32` |
-| Wan (Motion paths) | `wan2.1_i2v_480p_14B_fp16`, `clip_vision_h` |
+| H3 Recast, Restyle | the reference-to-video model, Turbo LoRA, text encoder and VAEs above |
+| Wan VACE (Restyle, Replace) | `wan2.1_vace_14B_fp16`, `umt5_xxl_fp8_e4m3fn_scaled`, `wan_2.1_vae`, `Wan21_CausVid_14B_T2V_lora_rank32` |
+| SCAIL-2 (Recast) | `wan2.1_14B_SCAIL_2_fp16`, `wan2.1_SCAIL_2_DPO_lora_bf16`, `sam3.1_multiplex_fp16` (checkpoint), `clip_vision_h`, `umt5_xxl_fp8_e4m3fn_scaled`, `wan_2.1_vae`; faster with `lightx2v_I2V_14B_480p_cfg_step_distill_rank64_bf16` |
+| H3 Fun ControlNet (Replace) | `minimax_h3_fun_controlnet_union_pruned_int8_convrot` (model patch) and the H3 reference-to-video files |
+| Wan (Motion paths) | `wan2.1_i2v_480p_14B_fp16` (WanMove) or `Wan2_1-I2V-ATI-14B_fp8_e4m3fn` (ATI), `clip_vision_h` |
 | Qwen Image Edit | `qwen_image_edit_fp8_e4m3fn`, `qwen_2.5_vl_7b_fp8_scaled`, `qwen_image_vae` |
 | Flux Kontext | `flux1-dev-kontext_fp8_scaled`, `clip_l`, `t5xxl_fp8_e4m3fn_scaled`, `ae` |
 | Upscale | `z_image_turbo_bf16`, `qwen_3_4b`, `ae` |

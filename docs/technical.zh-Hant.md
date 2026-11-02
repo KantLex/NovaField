@@ -138,9 +138,29 @@ Python 的 `LOOK_PARAMS`，檢查兩邊是否一致。**精確檢查**會用真�
 **配合。** 參考畫面取自所選鏡次中段的一格（`/api/jobs/[id]/frame`）。瀏覽器會測量它的 Lab 統計值
 （`src/ui/grade/labOf.ts`、`src/lib/cinema/match.ts`）用於預覽；節點則在 GPU 上重新測量一次。
 
-### 變身（`src/ui/henshin`、`src/lib/engines/autotrack.ts`）
+### 變身（`src/ui/henshin`、`src/lib/engines/autotrack.ts`、`src/lib/engines/henshinModels.ts`）
 
-**用片段的哪一段。** 給 H3（換角、換風格）或 Wan（替換）用的片段在上傳時會從原始影片裁出，素材會帶著 `source`：
+**用哪個模型。** `HENSHIN_MODELS` 列出每種模式的模型（第一個是預設），並標出兩個推薦。
+規格帶有 `model`（換角是 `h3` 或 `scail`，換風格是 `h3` 或 `vace`，替換是 `vace` 或 `h3-control`，運動路徑是 `wanmove` 或 `ati`）；
+`compile` 依它分流，`blocker` 會列出缺少的模型需要的檔案。每個模型註明它吃哪種片段：H3 的（24 fps、最長 15 秒）或 Wan 的（16 fps、81 格）。
+選了吃另一種片段的模型時，會透過 `POST /api/trim` 從同一支原始影片重新裁出同一段；在替換中，方框關鍵影格也會移到新影格率下的同一時刻。
+頁面把每種模式的選擇存在 `novafield-henshin` 的 `models`；代理程式對四個變身工具傳 `model`，命令列用 `--model`，`list_engines` 會列出各模型及其需求。
+
+- **SCAIL-2 換角**（`compileRecastScail`）：SAM 3.1 追蹤片段與角色圖片中的人物，`SCAIL2ColoredMask` 為他們配上對應的顏色，
+  `WanSCAILToVideo` 以替換模式換掉最大的那個人；一次 81 格，以 32 像素為單位。伺服器有 I2V 蒸餾 LoRA 時跑 6 步，否則 40 步。
+- **VACE 換風格**（`compileRestyleVace`）：每一格的 Canny 邊緣作為控制影片；文字與風格圖片決定外觀，膠片風格照樣套用，與 H3 相同。
+- **H3 替換**（`compileReplaceH3`）：`MiniMaxH3FunControlNetApply` 只重繪原始畫格上 `NovaBoxTrackMask` 遮罩內的部分，由參考生成影片畫出放進去的東西。
+- **ATI 運動路徑**：同樣的逐格點位以文字送進 `WanTrackToVideo`。
+
+Wan 模型不會產生聲音，所以「新的聲音」只在 H3 提供。
+
+**你自己的工作流程。** 當 `workflowFits` 判定匯入的工作流程能接收某模式的素材時，它就能執行該模式：能從提示詞產生影片，並有影片欄位
+（換角還需要圖片欄位；運動路徑只需要圖片欄位）。頁面以 `wf:<id>` 儲存，規格像攝影棚鏡頭一樣帶有 `engine`，所以 `recipeIdOf`、阻擋訊息、
+價格與點數上限都和其他工作流程一樣運作。`compileRecipeHenshin` 把 H3 用的片段放進第一個影片欄位，圖片放進圖片欄位，指示以白話寫進提示詞；
+方框軌跡或手繪路徑也會用文字寫在那裡，並附上註記。聲音、畫質與膠片風格交給工作流程。代理程式傳 `workflow`（MCP）或 `--engine`（CLI），
+`list_engines` 會列出每個工作流程可用的 `henshin` 模式。
+
+**用片段的哪一段。** 給 H3 或 Wan（看模式的模型吃哪一種）用的片段在上傳時會從原始影片裁出，素材會帶著 `source`：
 原始影片的 URL、長度，以及這一段從哪裡開始。拖動修剪條就會移動這一段，`POST /api/trim` 會從原始影片重新裁出（ffmpeg 跳到起點）；
 H3 最長 15 秒，Wan 為 16 fps 的 81 格，兩者都至少 2.4 秒。
 
@@ -148,6 +168,10 @@ H3 最長 15 秒，Wan 為 16 fps 的 81 格，兩者都至少 2.4 秒。
 它用正規化互相關比對色塊，對方框中央加重權重以降低背景的影響，並在物件上一次出現的位置附近、以幾種大小搜尋。
 比對分數太低，或不再像一開始框住的樣子時，就判定跟丟。路徑會先平滑，再精簡成 `NovaBoxTrackMask` 的 smoothstep
 能在畫面 1.5% 以內重現的最少關鍵影格。
+
+**要換角的人。** 在原始片段的某一格點選人物，規格就會帶著 `target`（位置 0–1 與時間〔秒〕）。
+提示詞會用站位指出這個人（「2.5 秒時畫面右側的人」），其他人保持不變；沒有指定時就是主要人物。
+**換風格預設**（`src/lib/cinema/looks.ts` 的 `RESTYLES`）會填入風格文字和相配的底片；兩者都還能修改。
 
 **比較。** 變身的鏡次會和原始片段（或被做成動畫的靜態圖）疊在一起，以分隔線區分，並與鏡次保持在同一格播放。
 
@@ -207,8 +231,11 @@ H3 最長 15 秒，Wan 為 16 fps 的 81 格，兩者都至少 2.4 秒。
 | 功能 | 檔案 |
 |---|---|
 | MiniMax H3 鏡頭 | `minimax_h3_fl2va_pruned_int8_convrot`、`minimax_h3_ref2va_pruned_int8_convrot`、Turbo LoRA `minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16` 和 `minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16`、`qwen3vl_32b_minimax_h3_nvfp4_awq`、`minimax_h3_video_vae_fp16`、`minimax_h3_audio_vae_fp32` |
-| Wan（換角、換風格、替換） | `wan2.1_vace_14B_fp16`、`umt5_xxl_fp8_e4m3fn_scaled`、`wan_2.1_vae`、`Wan21_CausVid_14B_T2V_lora_rank32` |
-| Wan（運動路徑） | `wan2.1_i2v_480p_14B_fp16`、`clip_vision_h` |
+| H3 換角、換風格 | 上面的參考生成影片模型、Turbo LoRA、文字編碼器與 VAE |
+| Wan VACE（換風格、替換） | `wan2.1_vace_14B_fp16`、`umt5_xxl_fp8_e4m3fn_scaled`、`wan_2.1_vae`、`Wan21_CausVid_14B_T2V_lora_rank32` |
+| SCAIL-2（換角） | `wan2.1_14B_SCAIL_2_fp16`、`wan2.1_SCAIL_2_DPO_lora_bf16`、`sam3.1_multiplex_fp16`（checkpoint）、`clip_vision_h`、`umt5_xxl_fp8_e4m3fn_scaled`、`wan_2.1_vae`；有 `lightx2v_I2V_14B_480p_cfg_step_distill_rank64_bf16` 時更快 |
+| H3 Fun ControlNet（替換） | `minimax_h3_fun_controlnet_union_pruned_int8_convrot`（模型補丁）以及 H3 參考生成影片的檔案 |
+| Wan（運動路徑） | `wan2.1_i2v_480p_14B_fp16`（WanMove）或 `Wan2_1-I2V-ATI-14B_fp8_e4m3fn`（ATI）、`clip_vision_h` |
 | Qwen Image Edit | `qwen_image_edit_fp8_e4m3fn`、`qwen_2.5_vl_7b_fp8_scaled`、`qwen_image_vae` |
 | Flux Kontext | `flux1-dev-kontext_fp8_scaled`、`clip_l`、`t5xxl_fp8_e4m3fn_scaled`、`ae` |
 | 放大 | `z_image_turbo_bf16`、`qwen_3_4b`、`ae` |

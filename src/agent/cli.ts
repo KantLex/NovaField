@@ -27,7 +27,7 @@ import type { AssetKind } from "@/lib/assets";
 import { isEngine } from "@/lib/workflows/apply";
 import { parseBox, parseClip, parseFrameMove, parsePairs, parsePath, parseRef } from "./cliArgs";
 import { NovaError, NovaField, type Preflight } from "./client";
-import { pathsSpec, recastSpec, replaceSpec, restyleSpec, type Sound } from "./henshin";
+import { clipPurpose, pathsSpec, recastSpec, replaceSpec, restyleSpec, type Sound } from "./henshin";
 import { repoFile } from "./paths";
 import { ASPECTS, DEFAULT_FILM, buildShot, checkShot, describeFields, randomSeed, workflowSpec, workflowValues, type ShotOptions } from "./shot";
 import { cameraVocabulary } from "./vocabulary";
@@ -50,7 +50,8 @@ Make (each one plans and prints the price; add --max-credits <n> to render, 0 = 
   restyle <clip> [--style "…"] [--style-picture <picture>] [--look <id>]          Re-render in a new look
   replace <clip> --box x,y,w,h[@s]… (--becomes "…" | --picture <picture>) [--shape ellipse]
   animate <picture> [--path "x,y x,y[@start-end][:ease]"…] [--frame-move pan_left[:0.15]] [--prompt "…"]
-      Henshin options: --audio original|generated|none  --quality <q>  --seed <n>
+      Henshin options: --model <id>  --engine <workflow id>  --audio original|generated|none  --quality <q>  --seed <n>
+      Models: recast h3|scail, restyle h3|vace, replace vace|h3-control, animate wanmove|ati; --engine runs your imported workflow instead
   image edit <picture> "<change>" [--model qwen|kontext]                         Change a picture in words
   image upscale <picture> [--scale 1.5-2] [--creativity 0-1] [--prompt "what it shows"]
   image expand <picture> --aspect 16:9 ["what fills the new space"]
@@ -452,24 +453,35 @@ const henshinCommon = () => ({ audio: (o.audio as Sound) ?? "original", quality:
 
 async function recast() {
   if (!o.character) throw new NovaError("Who goes in? --character <picture>");
-  const [source, character, extras] = await Promise.all([clip(arg(1, "Recast which clip? novafield recast <clip> --character <picture>"), "h3"), picture(o.character), Promise.all((o.extra ?? []).map(picture))]);
-  return render([recastSpec({ source, character, extras, notes: o.notes, ...henshinCommon() })], [`Recast: ${source.label ?? source.name} → ${character.label ?? "the character"}`]);
+  const [source, character, extras] = await Promise.all([
+    clip(arg(1, "Recast which clip? novafield recast <clip> --character <picture>"), clipPurpose("recast", o.model, o.engine)),
+    picture(o.character),
+    Promise.all((o.extra ?? []).map(picture)),
+  ]);
+  return render([recastSpec({ model: o.model, workflow: o.engine, source, character, extras, notes: o.notes, ...henshinCommon() })], [`Recast: ${source.label ?? source.name} → ${character.label ?? "the character"}`]);
 }
 
 async function restyle() {
-  const [source, styleRef] = await Promise.all([clip(arg(1, "Restyle which clip? novafield restyle <clip> --style \"…\""), "h3"), o["style-picture"] ? picture(o["style-picture"]) : undefined]);
-  return render([restyleSpec({ source, style: o.style, styleRef, look: o.look, ...henshinCommon() })], [`Restyle: ${o.style ?? "in the style picture's look"}`]);
+  const [source, styleRef] = await Promise.all([
+    clip(arg(1, "Restyle which clip? novafield restyle <clip> --style \"…\""), clipPurpose("restyle", o.model, o.engine)),
+    o["style-picture"] ? picture(o["style-picture"]) : undefined,
+  ]);
+  return render([restyleSpec({ model: o.model, workflow: o.engine, source, style: o.style, styleRef, look: o.look, ...henshinCommon() })], [`Restyle: ${o.style ?? "in the style picture's look"}`]);
 }
 
 async function replace() {
   if (!o.box?.length) throw new NovaError("Where is it? --box x,y,w,h[@seconds] (repeat for something that moves)");
-  const [source, replacement] = await Promise.all([clip(arg(1, "Replace in which clip? novafield replace <clip> --box … --becomes \"…\""), "wan"), o.picture ? picture(o.picture) : undefined]);
-  return render([replaceSpec({ source, boxes: o.box.map(parseBox), shape: o.shape === "ellipse" ? "ellipse" : "rect", prompt: o.becomes, replacement, seed: num(o.seed) })], [`Replace: ${o.becomes ?? "with the picture"}`]);
+  const [source, replacement] = await Promise.all([
+    clip(arg(1, "Replace in which clip? novafield replace <clip> --box … --becomes \"…\""), clipPurpose("replace", o.model, o.engine)),
+    o.picture ? picture(o.picture) : undefined,
+  ]);
+  const shape = o.shape === "ellipse" ? "ellipse" : "rect";
+  return render([replaceSpec({ model: o.model, workflow: o.engine, source, boxes: o.box.map(parseBox), shape, prompt: o.becomes, replacement, quality: o.quality as Quality, seed: num(o.seed) })], [`Replace: ${o.becomes ?? "with the picture"}`]);
 }
 
 async function animate() {
   const image = await picture(arg(1, "Animate which picture? novafield animate <picture> --path \"x,y x,y\""));
-  return render([pathsSpec({ image, paths: (o.path ?? []).map(parsePath), frame: o["frame-move"] ? parseFrameMove(o["frame-move"]) : undefined, prompt: o.prompt, seed: num(o.seed) })], [`Animate: ${(o.path ?? []).length} path(s)${o["frame-move"] ? `, frame ${o["frame-move"]}` : ""}`]);
+  return render([pathsSpec({ model: o.model, workflow: o.engine, image, paths: (o.path ?? []).map(parsePath), frame: o["frame-move"] ? parseFrameMove(o["frame-move"]) : undefined, prompt: o.prompt, seed: num(o.seed) })], [`Animate: ${(o.path ?? []).length} path(s)${o["frame-move"] ? `, frame ${o["frame-move"]}` : ""}`]);
 }
 
 async function image() {

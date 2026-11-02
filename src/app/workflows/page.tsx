@@ -74,7 +74,7 @@ function WorkflowsPage() {
           {list.map((r) => (
             <button
               key={r.id}
-              onClick={() => r.id !== current && confirmDiscard() && setSelected(r.id)}
+              onClick={() => r.id !== current && void confirmDiscard().then((ok) => ok && setSelected(r.id))}
               className={clsx("flex flex-col gap-0.5 rounded-md px-3 py-2 text-left transition-colors", current === r.id ? "bg-raised" : "hover:bg-surround")}
             >
               <span className="truncate text-[14px]">{r.name}</span>

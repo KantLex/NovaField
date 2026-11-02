@@ -149,9 +149,33 @@ LoadVideo → GetVideoComponents
 **マッチ。** 参照には、選んだテイクの中ほどのフレームを使います（`/api/jobs/[id]/frame`）。ブラウザはプレビュー用に
 その Lab 統計量を測り（`src/ui/grade/labOf.ts`、`src/lib/cinema/match.ts`）、ノードは GPU で改めて測ります。
 
-### 変身（`src/ui/henshin`、`src/lib/engines/autotrack.ts`）
+### 変身（`src/ui/henshin`、`src/lib/engines/autotrack.ts`、`src/lib/engines/henshinModels.ts`）
 
-**クリップのどの部分を使うか。** H3（リキャスト、リスタイル）や Wan（置き換え）用のクリップはアップロード時に元の映像から切り出され、
+**どのモデルを使うか。** `HENSHIN_MODELS` がモードごとのモデルを並べ（先頭が既定）、2 つをおすすめとして示します。
+スペックは `model` を持ち（リキャストは `h3` か `scail`、リスタイルは `h3` か `vace`、置き換えは `vace` か `h3-control`、
+モーションパスは `wanmove` か `ati`）、`compile` はそれで振り分け、`blocker` は足りないモデルに必要なファイルを示します。
+各モデルは受け取るクリップの種類（H3 用：24 fps、最長 15 秒／Wan 用：16 fps、81 フレーム）を持ちます。
+種類の違うモデルを選ぶと、同じ元映像の同じ部分を `POST /api/trim` で切り出し直し、置き換えでは枠のキーフレームを新しいフレームレートの同じ瞬間へ移します。
+ページはモードごとの選択を `novafield-henshin` の `models` に保存します。エージェントは 4 つの変身ツールに `model` を、コマンドラインでは `--model` を渡し、
+`list_engines` は各モデルと必要なものを返します。
+
+- **SCAIL-2 のリキャスト**（`compileRecastScail`）：SAM 3.1 がクリップとキャラクター画像の人物を追跡し、`SCAIL2ColoredMask` が対応する色を付け、
+  `WanSCAILToVideo` が置き換えモードでいちばん大きい人物を差し替えます。81 フレーム 1 チャンク、32 ピクセル単位。
+  サーバーに I2V の蒸留 LoRA があれば 6 ステップ、なければ 40 ステップです。
+- **VACE のリスタイル**（`compileRestyleVace`）：全フレームの Canny エッジをコントロール動画にし、言葉とスタイル画像がルックを決め、フィルムストックは H3 と同じく掛かります。
+- **H3 の置き換え**（`compileReplaceH3`）：`MiniMaxH3FunControlNetApply` が元のフレーム上の `NovaBoxTrackMask` のマスク内だけを描き直し、参照動画がそこに入るものを描きます。
+- **ATI のモーションパス**：同じフレームごとの点を、テキストとして `WanTrackToVideo` に渡します。
+
+Wan のモデルは音を作らないので、「新しい音」は H3 でだけ選べます。
+
+**自分のワークフロー。** 読み込んだワークフローは、`workflowFits` がそのモードの素材を受け取れると判断したときに使えます。
+プロンプトから動画を作り、動画フィールドを持つこと（リキャストは画像フィールドも必要、モーションパスは画像フィールドだけで可）。
+ページは `wf:<id>` として保存し、スペックはスタジオのショットと同じく `engine` を持つので、`recipeIdOf`、ブロッカー、価格、クレジットの上限は他のワークフローと同様に働きます。
+`compileRecipeHenshin` は H3 用のクリップを最初の動画フィールドに、画像を画像フィールドに入れ、指示を平易な言葉でプロンプトに書きます。
+枠の追跡や描いたパスもそこに言葉で書き、注記を付けます。音、画質、フィルムストックはワークフローに任せます。
+エージェントは `workflow`（MCP）または `--engine`（CLI）を渡し、`list_engines` は各ワークフローの `henshin` モードを返します。
+
+**クリップのどの部分を使うか。** H3 用か Wan 用か（モードのモデルが受け取る方）のクリップはアップロード時に元の映像から切り出され、
 アセットは `source`（元の映像の URL、長さ、使う部分の開始位置）を持ちます。トリムバーでその部分を動かすと、
 `POST /api/trim` が元の映像から切り出し直します（ffmpeg で開始位置にシーク）。H3 は最大 15 秒、Wan は 16 fps で 81 フレーム、どちらも最短 2.4 秒です。
 
@@ -159,6 +183,10 @@ LoadVideo → GetVideoComponents
 色のパッチを正規化相互相関で照合し、背景の影響が小さくなるよう枠の中央を重く扱い、物が直前にあった近くを、いくつかの大きさで探します。
 一致度が下がりすぎたとき、または最初に囲んだ見た目と似なくなったときは見失ったと判断します。経路はなめらかにしてから、
 `NovaBoxTrackMask` の smoothstep が画面の 1.5% 以内でたどれる最少のキーフレームにまとめます。
+
+**リキャストする人物。** 元のクリップのフレーム上で人物をクリックすると、スペックに `target`（位置 0–1 と時刻〔秒〕）が入ります。
+プロンプトはその人物を立ち位置で示し（「2.5 秒時点で画面右にいる人物」）、ほかの人はそのまま残します。指定しなければ主な人物です。
+**リスタイルのプリセット**（`src/lib/cinema/looks.ts` の `RESTYLES`）は、スタイルの言葉とそれに合うフィルムストックを入れます。どちらも編集できます。
 
 **比較。** 変身のテイクは、元のクリップ（または動かした静止画）と仕切り線で重ねて、テイクと同じフレームで再生されます。
 
@@ -219,8 +247,11 @@ LoadVideo → GetVideoComponents
 | 機能 | ファイル |
 |---|---|
 | MiniMax H3 のショット | `minimax_h3_fl2va_pruned_int8_convrot`、`minimax_h3_ref2va_pruned_int8_convrot`、Turbo LoRA の `minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16` と `minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16`、`qwen3vl_32b_minimax_h3_nvfp4_awq`、`minimax_h3_video_vae_fp16`、`minimax_h3_audio_vae_fp32` |
-| Wan（リキャスト、リスタイル、置き換え） | `wan2.1_vace_14B_fp16`、`umt5_xxl_fp8_e4m3fn_scaled`、`wan_2.1_vae`、`Wan21_CausVid_14B_T2V_lora_rank32` |
-| Wan（モーションパス） | `wan2.1_i2v_480p_14B_fp16`、`clip_vision_h` |
+| H3 のリキャスト、リスタイル | 上の参照動画モデル、Turbo LoRA、テキストエンコーダー、VAE |
+| Wan VACE（リスタイル、置き換え） | `wan2.1_vace_14B_fp16`、`umt5_xxl_fp8_e4m3fn_scaled`、`wan_2.1_vae`、`Wan21_CausVid_14B_T2V_lora_rank32` |
+| SCAIL-2（リキャスト） | `wan2.1_14B_SCAIL_2_fp16`、`wan2.1_SCAIL_2_DPO_lora_bf16`、`sam3.1_multiplex_fp16`（チェックポイント）、`clip_vision_h`、`umt5_xxl_fp8_e4m3fn_scaled`、`wan_2.1_vae`。`lightx2v_I2V_14B_480p_cfg_step_distill_rank64_bf16` があれば高速 |
+| H3 Fun ControlNet（置き換え） | `minimax_h3_fun_controlnet_union_pruned_int8_convrot`（モデルパッチ）と H3 参照動画モデル一式 |
+| Wan（モーションパス） | `wan2.1_i2v_480p_14B_fp16`（WanMove）または `Wan2_1-I2V-ATI-14B_fp8_e4m3fn`（ATI）、`clip_vision_h` |
 | Qwen Image Edit | `qwen_image_edit_fp8_e4m3fn`、`qwen_2.5_vl_7b_fp8_scaled`、`qwen_image_vae` |
 | Flux Kontext | `flux1-dev-kontext_fp8_scaled`、`clip_l`、`t5xxl_fp8_e4m3fn_scaled`、`ae` |
 | アップスケール | `z_image_turbo_bf16`、`qwen_3_4b`、`ae` |

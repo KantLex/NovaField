@@ -15,7 +15,9 @@ import { isLive, type Job } from "@/lib/jobs";
 import { checkBudget, creditsOf } from "@/lib/comfy/budget";
 import type { JobSpec } from "@/lib/engines/specs";
 import { BudgetError, NovaField, type Preflight } from "./client";
-import { MAX_EXTRAS, MAX_PATHS, pathsSpec, recastSpec, replaceSpec, restyleSpec, WAN_FPS } from "./henshin";
+import type { Capabilities } from "@/lib/engines/capabilities";
+import { HENSHIN_MODELS, henshinReady, workflowFits, type HenshinKind } from "@/lib/engines/henshinModels";
+import { clipPurpose, MAX_EXTRAS, MAX_PATHS, pathsSpec, recastSpec, replaceSpec, restyleSpec, WAN_FPS } from "./henshin";
 import { repoFile } from "./paths";
 import { ASPECTS, QUALITIES, buildShot, checkShot, describeFields, workflowSpec, workflowValues, type ShotOptions } from "./shot";
 import { cameraVocabulary } from "./vocabulary";
@@ -235,7 +237,8 @@ server.registerTool(
   "list_engines",
   {
     title: "List engines",
-    description: "What can render: the built-in MiniMax H3 shot engine and every imported ComfyUI workflow, each tagged local (GPU) or API (paid cloud nodes), with its output kind, missing nodes, and the form fields with their roles (for run_workflow).",
+    description:
+      "What can render: the built-in MiniMax H3 shot engine, the Henshin models (the model choices for recast, restyle, replace_object and animate_still, two recommended each), and every imported ComfyUI workflow (with the Henshin modes it can run, for their workflow input), each tagged local (GPU) or API (paid cloud nodes), with its output kind, missing nodes, and the form fields with their roles (for run_workflow).",
     inputSchema: { fields: z.boolean().default(false).describe("Include each workflow's form fields.") },
     annotations: { readOnlyHint: true },
   },
@@ -243,6 +246,21 @@ server.registerTool(
     const [status, recipes] = await Promise.all([nova.status(), nova.workflows()]);
     return [
       { id: "h3", name: "MiniMax H3 (built-in shot engine)", kind: "shot", runs: "local", paid: false, output: "video", available: !!status.caps.h3, note: "Use plan_shot / generate. Camera moves, lens, ghost rig, cast references, film lab." },
+      ...(Object.keys(HENSHIN_MODELS) as HenshinKind[]).flatMap((mode) =>
+        HENSHIN_MODELS[mode].map((m, i) => ({
+          id: m.id,
+          name: m.name,
+          kind: `henshin:${mode}`,
+          runs: "local",
+          paid: false,
+          output: "video",
+          available: henshinReady(mode, m.id, status.caps as unknown as Capabilities),
+          ...(henshinReady(mode, m.id, status.caps as unknown as Capabilities) ? {} : { needs: m.files }),
+          recommended: m.recommended,
+          default: i === 0,
+          note: m.blurb,
+        })),
+      ),
       ...recipes.map((r) => ({
         id: r.id,
         name: r.name,
@@ -254,6 +272,7 @@ server.registerTool(
         available: !r.missing.length,
         ...(r.missing.length ? { missing: r.missing } : {}),
         roles: [...new Set(r.fields.filter((f) => f.role !== "none").map((f) => f.role))],
+        henshin: (Object.keys(HENSHIN_MODELS) as HenshinKind[]).filter((mode) => workflowFits(r, mode)),
         ...(fields ? { fields: describeFields(r) } : {}),
       })),
     ];
@@ -653,8 +672,10 @@ server.registerTool(
   {
     title: "Recast a clip (Henshin)",
     description:
-      "Swap the person in a clip for a character, keeping the motion, timing, framing and camera (MiniMax H3 reference-to-video). The source is 2 to 15 s. notes can also change wardrobe, lighting or background. Use it to keep one face across a whole film: shoot with any stand-in, then recast every shot to the lead.",
+      "Swap the person in a clip for a character, keeping the motion, timing, framing and camera. model h3 (default, MiniMax H3 reference-to-video, 2 to 15 s, keeps sound) or scail (SCAIL-2, made for swapping a person, 5 s at 16 fps, recasts the biggest person). notes can also change wardrobe, lighting or background. Use it to keep one face across a whole film: shoot with any stand-in, then recast every shot to the lead.",
     inputSchema: {
+      model: z.enum(["h3", "scail"]).optional().describe("h3 (default) or scail. list_engines says which the server has."),
+      workflow: z.string().optional().describe("An imported workflow's id (list_engines, kind workflow) to run instead of the built-in models: it gets the clip, the pictures and the words."),
       source: clipRef,
       character: pictureRef.describe("The new lead: a clear, front-facing, full-body picture works best."),
       extras: z.array(pictureRef).max(MAX_EXTRAS).optional().describe(`Up to ${MAX_EXTRAS} more pictures: other people or props in the clip.`),
@@ -666,10 +687,10 @@ server.registerTool(
     },
     annotations: { openWorldHint: true },
   },
-  tool(async (a: { source: z.infer<typeof clipRef>; character: z.infer<typeof pictureRef>; extras?: z.infer<typeof pictureRef>[]; notes?: string; audio: "original" | "generated" | "none"; quality: string; seed?: number } & HenshinRun) => {
-    const [source, character, extras] = await Promise.all([clipFor(a.source, "h3"), pictures(a.character).then((p) => p[0]), Promise.all((a.extras ?? []).map((e) => pictures(e).then((p) => p[0])))]);
+  tool(async (a: { model?: string; workflow?: string; source: z.infer<typeof clipRef>; character: z.infer<typeof pictureRef>; extras?: z.infer<typeof pictureRef>[]; notes?: string; audio: "original" | "generated" | "none"; quality: string; seed?: number } & HenshinRun) => {
+    const [source, character, extras] = await Promise.all([clipFor(a.source, clipPurpose("recast", a.model, a.workflow)), pictures(a.character).then((p) => p[0]), Promise.all((a.extras ?? []).map((e) => pictures(e).then((p) => p[0])))]);
     if (!character) throw new Error("The character needs a picture.");
-    return runHenshin(recastSpec({ source, character, extras: extras.filter(Boolean), notes: a.notes, audio: a.audio, quality: a.quality as never, seed: a.seed }), a);
+    return runHenshin(recastSpec({ model: a.model, workflow: a.workflow, source, character, extras: extras.filter(Boolean), notes: a.notes, audio: a.audio, quality: a.quality as never, seed: a.seed }), a);
   }),
 );
 
@@ -678,8 +699,10 @@ server.registerTool(
   {
     title: "Restyle a clip (Henshin)",
     description:
-      "Re-render a clip in a new look, shot for shot: same motion and framing, new medium (claymation, anime cel, oil paint, a period film stock…). Give the style in words, a style picture, or both; a film look grades it on the GPU afterwards. The source is 2 to 15 s.",
+      "Re-render a clip in a new look, shot for shot: same motion and framing, new medium (claymation, anime cel, oil paint, a period film stock…). Give the style in words, a style picture, or both; a film look grades it on the GPU afterwards. model h3 (default, MiniMax H3, 2 to 15 s, free to reinterpret) or vace (Wan 2.1 VACE following the clip's edges, 5 s at 16 fps, holds shapes under heavy styles).",
     inputSchema: {
+      model: z.enum(["h3", "vace"]).optional().describe("h3 (default) or vace."),
+      workflow: z.string().optional().describe("An imported workflow's id (list_engines, kind workflow) to run instead of the built-in models: it gets the clip, the pictures and the words."),
       source: clipRef,
       style: z.string().optional().describe("The new look in words, e.g. 'stop-motion claymation with felt textures'."),
       style_picture: pictureRef.optional().describe("A picture in the target style."),
@@ -691,9 +714,9 @@ server.registerTool(
     },
     annotations: { openWorldHint: true },
   },
-  tool(async (a: { source: z.infer<typeof clipRef>; style?: string; style_picture?: z.infer<typeof pictureRef>; look: string; audio: "original" | "generated" | "none"; quality: string; seed?: number } & HenshinRun) => {
-    const [source, styleRef] = await Promise.all([clipFor(a.source, "h3"), a.style_picture ? pictures(a.style_picture).then((p) => p[0]) : undefined]);
-    return runHenshin(restyleSpec({ source, style: a.style, styleRef, look: a.look, audio: a.audio, quality: a.quality as never, seed: a.seed }), a);
+  tool(async (a: { model?: string; workflow?: string; source: z.infer<typeof clipRef>; style?: string; style_picture?: z.infer<typeof pictureRef>; look: string; audio: "original" | "generated" | "none"; quality: string; seed?: number } & HenshinRun) => {
+    const [source, styleRef] = await Promise.all([clipFor(a.source, clipPurpose("restyle", a.model, a.workflow)), a.style_picture ? pictures(a.style_picture).then((p) => p[0]) : undefined]);
+    return runHenshin(restyleSpec({ model: a.model, workflow: a.workflow, source, style: a.style, styleRef, look: a.look, audio: a.audio, quality: a.quality as never, seed: a.seed }), a);
   }),
 );
 
@@ -709,21 +732,24 @@ server.registerTool(
   "replace_object",
   {
     title: "Replace an object in a clip (Henshin)",
-    description: `Track a box over the thing to replace and swap it for something else; everything outside the box is kept (Wan 2.1 VACE at ${WAN_FPS} fps, the first 5 s of the clip). Give one box for something still, or boxes at several times for something that moves: the box eases between them. Look at the clip's frames (get_take poster, or the file) to place the boxes.`,
+    description: `Track a box over the thing to replace and swap it for something else; everything outside the box is kept. model vace (default, Wan 2.1 VACE at ${WAN_FPS} fps, the first 5 s of the clip) or h3-control (MiniMax H3 with the Fun ControlNet, 24 fps, up to 15 s, keeps the sound). Give one box for something still, or boxes at several times for something that moves: the box eases between them. Look at the clip's frames (get_take poster, or the file) to place the boxes.`,
     inputSchema: {
+      model: z.enum(["vace", "h3-control"]).optional().describe("vace (default) or h3-control."),
+      workflow: z.string().optional().describe("An imported workflow's id (list_engines, kind workflow) to run instead of the built-in models: it gets the clip, the pictures and the words."),
       source: clipRef,
       boxes: z.array(boxInput).min(1).describe("Where the thing is, in 0–1 frame coordinates, at one or more times."),
       shape: z.enum(["rect", "ellipse"]).default("rect"),
       becomes: z.string().optional().describe("What it turns into, e.g. 'a golden retriever sitting calmly'."),
       picture: pictureRef.optional().describe("A picture of what it turns into."),
+      quality: quality.describe("h3-control only."),
       seed: z.number().int().optional(),
       ...henshinRun,
     },
     annotations: { openWorldHint: true },
   },
-  tool(async (a: { source: z.infer<typeof clipRef>; boxes: z.infer<typeof boxInput>[]; shape: "rect" | "ellipse"; becomes?: string; picture?: z.infer<typeof pictureRef>; seed?: number } & HenshinRun) => {
-    const [source, replacement] = await Promise.all([clipFor(a.source, "wan"), a.picture ? pictures(a.picture).then((p) => p[0]) : undefined]);
-    return runHenshin(replaceSpec({ source, boxes: a.boxes, shape: a.shape, prompt: a.becomes, replacement, seed: a.seed }), a);
+  tool(async (a: { model?: string; workflow?: string; source: z.infer<typeof clipRef>; boxes: z.infer<typeof boxInput>[]; shape: "rect" | "ellipse"; becomes?: string; picture?: z.infer<typeof pictureRef>; quality: string; seed?: number } & HenshinRun) => {
+    const [source, replacement] = await Promise.all([clipFor(a.source, clipPurpose("replace", a.model, a.workflow)), a.picture ? pictures(a.picture).then((p) => p[0]) : undefined]);
+    return runHenshin(replaceSpec({ model: a.model, workflow: a.workflow, source, boxes: a.boxes, shape: a.shape, prompt: a.becomes, replacement, quality: a.quality as never, seed: a.seed }), a);
   }),
 );
 
@@ -738,8 +764,10 @@ server.registerTool(
   "animate_still",
   {
     title: "Animate a still along paths (Henshin)",
-    description: `Bring a still to life by drawing where things move (WanMove with Wan 2.1 image-to-video, 5 s). Each path moves the thing under its first point along it; single points pin things still. A frame move (pan, tilt, push, pull) moves the whole picture like a camera. Up to ${MAX_PATHS} paths in all. The clip takes the still's shape.`,
+    description: `Bring a still to life by drawing where things move (5 s; model wanmove, the default, is WanMove with Wan 2.1 image-to-video; ati is Wan 2.1 ATI). Each path moves the thing under its first point along it; single points pin things still. A frame move (pan, tilt, push, pull) moves the whole picture like a camera. Up to ${MAX_PATHS} paths in all. The clip takes the still's shape.`,
     inputSchema: {
+      model: z.enum(["wanmove", "ati"]).optional().describe("wanmove (default) or ati."),
+      workflow: z.string().optional().describe("An imported workflow's id (list_engines, kind workflow) to run instead of the built-in models: it gets the clip, the pictures and the words."),
       image: pictureRef.describe("The still to animate."),
       paths: z.array(pathInput).default([]),
       frame_move: z
@@ -751,10 +779,10 @@ server.registerTool(
     },
     annotations: { openWorldHint: true },
   },
-  tool(async (a: { image: z.infer<typeof pictureRef>; paths: z.infer<typeof pathInput>[]; frame_move?: { move: "pan_left" | "pan_right" | "tilt_up" | "tilt_down" | "push_in" | "pull_out"; amount: number }; prompt?: string; seed?: number } & HenshinRun) => {
+  tool(async (a: { model?: string; workflow?: string; image: z.infer<typeof pictureRef>; paths: z.infer<typeof pathInput>[]; frame_move?: { move: "pan_left" | "pan_right" | "tilt_up" | "tilt_down" | "push_in" | "pull_out"; amount: number }; prompt?: string; seed?: number } & HenshinRun) => {
     const image = (await pictures(a.image))[0];
     if (!image) throw new Error("The still needs a picture.");
-    return runHenshin(pathsSpec({ image, paths: a.paths as never, frame: a.frame_move, prompt: a.prompt, seed: a.seed }), a);
+    return runHenshin(pathsSpec({ model: a.model, workflow: a.workflow, image, paths: a.paths as never, frame: a.frame_move, prompt: a.prompt, seed: a.seed }), a);
   }),
 );
 

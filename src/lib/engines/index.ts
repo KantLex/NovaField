@@ -1,12 +1,13 @@
 import { blockingMissing } from "../workflows/missing";
 import type { Recipe } from "../workflows/types";
-import { compileRecipeShot, compileWorkflow } from "../workflows/compile";
+import { compileRecipeHenshin, compileRecipeShot, compileWorkflow } from "../workflows/compile";
 import type { Capabilities } from "./capabilities";
-import { compileRecastOrRestyle, compileShot, type Compiled } from "./h3";
+import { compileRecastOrRestyle, compileReplaceH3, compileShot, type Compiled } from "./h3";
+import { henshinModel, henshinReady, isHenshin, workflowFits } from "./henshinModels";
 import { compileGrade, gradeBlocker } from "./grade";
 import { compileImage, imageBlocker } from "./image";
 import { withSectionsOff, type JobSpec } from "./specs";
-import { compilePaths, compileReplace } from "./wan";
+import { compilePaths, compileRecastScail, compileReplace, compileRestyleVace } from "./wan";
 import { say } from "@/lib/say";
 
 export type { Compiled };
@@ -16,20 +17,23 @@ export interface CompileContext {
   recipes?: Record<string, Recipe | null | undefined>;
 }
 
-export const recipeIdOf = (spec: JobSpec) => (spec.kind === "workflow" ? spec.recipe : spec.kind === "shot" ? (spec.engine ?? null) : null);
+export const recipeIdOf = (spec: JobSpec) =>
+  spec.kind === "workflow" ? spec.recipe : spec.kind === "image" || spec.kind === "grade" ? null : (spec.engine ?? null);
 
 export function compile(spec: JobSpec, caps: Capabilities, ctx: CompileContext = {}): Compiled {
   const rid = recipeIdOf(spec);
   const recipe = rid ? ctx.recipes?.[rid] : null;
   if (rid && !recipe) throw new Error(say("That workflow was deleted. Import it again or pick another engine."));
+  if (recipe && isHenshin(spec)) return compileRecipeHenshin(spec, recipe);
   switch (spec.kind) {
     case "shot":
       return recipe ? compileRecipeShot(withSectionsOff(spec), recipe) : compileShot(withSectionsOff(spec), caps);
     case "recast":
+      return spec.model === "scail" ? compileRecastScail(spec, caps) : compileRecastOrRestyle(spec, caps);
     case "restyle":
-      return compileRecastOrRestyle(spec, caps);
+      return spec.model === "vace" ? compileRestyleVace(spec, caps) : compileRecastOrRestyle(spec, caps);
     case "replace":
-      return compileReplace(spec, caps);
+      return spec.model === "h3-control" ? compileReplaceH3(spec, caps) : compileReplace(spec, caps);
     case "paths":
       return compilePaths(spec, caps);
     case "workflow":
@@ -47,6 +51,8 @@ export function blocker(spec: JobSpec, caps: Capabilities, ctx: CompileContext =
   if (rid) {
     const r = ctx.recipes?.[rid];
     if (!r) return say("That workflow was deleted. Import it again or pick another engine.");
+    if (isHenshin(spec) && !workflowFits(r, spec.kind))
+      return say("This workflow doesn't take what this mode gives it: words and a clip (and a picture, for Recast), or a still, for motion paths.");
     const blocking = blockingMissing(r.missing);
     if (!blocking.length) return null;
     return blocking.length === 1
@@ -58,12 +64,13 @@ export function blocker(spec: JobSpec, caps: Capabilities, ctx: CompileContext =
       return caps.h3 ? null : say("MiniMax H3 is not installed on the server.");
     case "recast":
     case "restyle":
-      return caps.h3Ref ? null : say("MiniMax H3 reference-to-video is not installed on the server.");
     case "replace":
-      if (!caps.vace) return say("Wan 2.1 VACE is not installed on the server.");
-      return caps.pack.boxTrack ? null : say("Replace needs the NovaField nodes (NovaBoxTrackMask). Install the pack to unlock it.");
-    case "paths":
-      return caps.wanMove ? null : say("WanMove with Wan 2.1 I2V is not installed on the server.");
+    case "paths": {
+      const m = henshinModel(spec.kind, spec.model);
+      if (henshinReady(spec.kind, m.id, caps)) return null;
+      if (spec.kind === "replace" && !caps.pack.boxTrack) return say("Replace needs the NovaField nodes (NovaBoxTrackMask). Install the pack to unlock it.");
+      return say("{model} is not installed on the server. It needs: {files}.", { model: m.name, files: m.files.join(", ") });
+    }
     case "image":
       return imageBlocker(spec, caps);
     case "grade":

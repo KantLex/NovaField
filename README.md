@@ -272,14 +272,29 @@ seed. When a picture is right, **Animate this picture** sends it to Studio as a 
 
 <img src="docs/media/shots/henshin.jpg" alt="Henshin showing a clip recast as your character">
 
-- **Recast:** swap the person in a clip for your character, keeping the motion and camera.
-- **Restyle:** re-render a clip shot for shot in a new look.
+- **Recast:** swap the person in a clip for your character, keeping the motion and camera. With
+  several people in the shot, click the one who changes.
+- **Restyle:** re-render a clip shot for shot in a new look. Start from a preset (claymation,
+  anime cel, watercolour, comic ink, film noir and more) or describe your own.
 - **Replace:** draw a box around an object once and press **Track**: NovaField follows it through
   the clip and swaps it for something else. Fix the box on any frame where it's off.
 - **Choose the part:** drop a long clip and drag the trim bar to pick the seconds to use.
 - **Compare:** on a finished take, drag a line across the picture to see before and after.
 - **Motion paths:** draw curves on a still and it moves along them, each path with its own timing,
   or move the whole frame like a camera.
+- **Choose the model:** each mode lists two recommended models (below). Pick either one; a model
+  your server doesn't have shows which files it needs. Switching between H3 and Wan cuts the same
+  part of the clip again at that model's frame rate, and a box track moves with it. Your own
+  imported workflows are listed too (local or paid API), in each mode whose footage they take: a
+  clip, plus a picture for Recast, or a still for Motion paths. They get the clip, the pictures and
+  the instructions in their prompt.
+
+| Mode | Default | Also recommended |
+|---|---|---|
+| Recast | MiniMax H3: up to 15 s with sound, and you pick who changes | SCAIL-2: built for swapping a person, follows their pose frame by frame (5 s) |
+| Restyle | MiniMax H3: free to reinterpret materials and light, up to 15 s with sound | Wan 2.1 VACE: follows the clip's edges, so shapes hold under heavy styles (5 s) |
+| Replace | Wan 2.1 VACE: repaints only inside the box (5 s) | MiniMax H3 + Fun ControlNet: repaints the box at 24 fps, up to 15 s, keeps the sound |
+| Motion paths | Wan 2.1 + WanMove | Wan 2.1 ATI: a trajectory model, often looser, livelier motion |
 
 ### Grade: the film look, continuity and motion
 
@@ -390,8 +405,11 @@ needs it.
 | Feature | What the server needs |
 |---|---|
 | Studio shots, Continue this shot | MiniMax H3 (both models, their Turbo LoRAs, the Qwen3-VL text encoder, video and audio VAEs) |
-| Henshin: Recast, Restyle, Replace | Wan 2.1 VACE 14B, `umt5_xxl_fp8`, the Wan VAE, the CausVid LoRA |
-| Henshin: Motion paths | Wan 2.1 I2V 480p 14B and `clip_vision_h` |
+| Henshin: Recast and Restyle on H3 | MiniMax H3 reference-to-video (with its Turbo LoRA, text encoder and VAEs) |
+| Henshin: Restyle and Replace on VACE | Wan 2.1 VACE 14B, `umt5_xxl_fp8`, the Wan VAE, the CausVid LoRA |
+| Henshin: Recast on SCAIL-2 | SCAIL-2 14B and its DPO LoRA, SAM 3.1, `clip_vision_h`, the Wan text encoder and VAE |
+| Henshin: Replace on H3 | MiniMax H3 reference-to-video and the H3 Fun ControlNet Union patch |
+| Henshin: Motion paths | Wan 2.1 I2V 480p 14B (WanMove) or Wan 2.1 ATI 14B, and `clip_vision_h` |
 | Image: Edit and Expand | Qwen Image Edit, or Flux Kontext |
 | Image: Upscale | Z Image Turbo (`z_image_turbo_bf16`, `qwen_3_4b`, `ae.safetensors`) |
 | 48 fps, Grade: Shutter and Speed | FILM frame interpolation (`film_net_fp16`) |

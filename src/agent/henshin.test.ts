@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Asset } from "@/lib/engines/specs";
-import { boxKeys, pathsFrom, pathsSpec, recastSpec, replaceSpec, restyleSpec } from "./henshin";
+import { boxKeys, clipPurpose, modelFor, pathsFrom, pathsSpec, recastSpec, replaceSpec, restyleSpec } from "./henshin";
 
 const clip: Asset = { name: "clip.mp4", kind: "video", url: "/c.mp4", frames: 81, fps: 16, width: 832, height: 480 };
 const pic: Asset = { name: "lead.png", kind: "image", url: "/l.png", width: 1080, height: 1920 };
@@ -59,4 +59,28 @@ describe("Henshin for agents", () => {
   it("animates in the still's own shape", () => {
     expect(pathsSpec({ image: pic, paths: [{ points: [[0.5, 0.5]] }] }).aspect).toBe("9:16");
   });
+
+  it("runs on the model asked for, takes the clip it needs, and names the choices for a wrong one", () => {
+    expect(recastSpec({ source: clip, character: pic }).model).toBe("h3");
+    expect(recastSpec({ model: "scail", source: clip, character: pic }).model).toBe("scail");
+    expect(() => recastSpec({ model: "vace", source: clip, character: pic })).toThrow(/use h3 or scail/);
+    expect(pathsSpec({ model: "ati", image: pic, paths: [{ points: [[0.2, 0.5], [0.8, 0.5]] }] }).model).toBe("ati");
+    expect([clipPurpose("recast"), clipPurpose("recast", "scail"), clipPurpose("restyle", "vace"), clipPurpose("replace"), clipPurpose("replace", "h3-control")]).toEqual(["h3", "wan", "wan", "wan", "h3"]);
+    expect(modelFor("paths").id).toBe("wanmove");
+  });
+
+  it("counts box keyframes at 24 fps when the replace runs on H3", () => {
+    const h3: Asset = { ...clip, frames: 124, fps: 24 };
+    const s = replaceSpec({ model: "h3-control", source: h3, boxes: [{ x: 0.1, y: 0.1, w: 0.2, h: 0.2, at: 2 }], prompt: "a lamp" });
+    expect(s.keys[0].f).toBe(48);
+    expect(s.quality).toBe("draft");
+    expect(replaceSpec({ source: clip, boxes: [{ x: 0.1, y: 0.1, w: 0.2, h: 0.2 }], prompt: "a lamp" }).quality).toBeUndefined();
+  });
+
+  it("runs through an imported workflow when one is named, on H3's clip", () => {
+    expect(recastSpec({ workflow: "wf1", source: clip, character: pic }).engine).toBe("wf1");
+    expect(restyleSpec({ source: clip, style: "clay" }).engine).toBeUndefined();
+    expect(clipPurpose("replace", undefined, "wf1")).toBe("h3");
+  });
 });
+

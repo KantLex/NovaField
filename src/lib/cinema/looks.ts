@@ -55,6 +55,20 @@ export const LOOKS: FilmLook[] = [
   { id: "super8", label: "Super 8", note: "Warm home movie with a wobbling gate", prompt: "Super 8 home movie footage, warm faded colour", swatch: ["#24180e", "#b27a45", "#f3dcb0"], grain: 0.7, halation: 0.2, vignette: 0.45, gateWeave: 0.5, since: "0.3" },
 ];
 
+/** Ready-made styles for Henshin's Restyle: the words for H3 and the film stock that suits them. */
+export const RESTYLES: { id: string; label: string; prompt: string; look: FilmLook["id"] }[] = [
+  { id: "claymation", label: "Claymation", prompt: "stop-motion claymation: hand-sculpted plasticine figures with visible fingerprints, felt and cardboard sets, soft studio light, slightly stepped motion", look: "none" },
+  { id: "anime", label: "Anime cel", prompt: "1990s hand-painted anime cel animation: clean ink outlines, flat cel shading, painted watercolour backgrounds", look: "none" },
+  { id: "watercolour", label: "Watercolour", prompt: "a watercolour painting in motion: soft bleeding edges, visible paper grain, gentle muted washes", look: "none" },
+  { id: "comic", label: "Comic ink", prompt: "a comic book come to life: bold black ink outlines, halftone dots, flat vivid colours", look: "none" },
+  { id: "oil", label: "Oil painting", prompt: "an impressionist oil painting in motion: thick visible brushstrokes, rich layered colour, dappled light", look: "none" },
+  { id: "pixel", label: "Pixel art", prompt: "16-bit pixel art: chunky square pixels, a limited palette, dithered shading", look: "none" },
+  { id: "lowpoly", label: "Low-poly 3D", prompt: "a low-poly 3D render: flat-shaded facets, simple geometric shapes, soft pastel light", look: "none" },
+  { id: "documentary", label: "16 mm documentary", prompt: "gritty 16 mm documentary footage: natural available light, real textures, slight softness and grain", look: "kodak_vision3_500t" },
+  { id: "noir", label: "Film noir", prompt: "1940s film noir: hard low-key light, deep shadows, venetian-blind patterns, smoky air", look: "noir" },
+  { id: "neon", label: "Neon night", prompt: "a neon-soaked city at night: magenta and cyan signs, rain-slick reflections, glowing haze", look: "cinestill_800t" },
+];
+
 /** Where the key light comes from, as the opening camera sees it. The 3D set is lit the same way. */
 export const LIGHT_FROM = [
   { id: "auto", label: "Any side", prompt: "" },

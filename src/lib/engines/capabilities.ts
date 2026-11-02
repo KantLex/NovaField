@@ -17,6 +17,12 @@ export const MODELS = {
   wanVae: "wan_2.1_vae.safetensors",
   clipVision: "clip_vision_h.safetensors",
   causvid: "Wan21_CausVid_14B_T2V_lora_rank32.safetensors",
+  scail: "wan2.1_14B_SCAIL_2_fp16.safetensors",
+  scailDpo: "wan2.1_SCAIL_2_DPO_lora_bf16.safetensors",
+  wanI2vDistill: "lightx2v_I2V_14B_480p_cfg_step_distill_rank64_bf16.safetensors",
+  sam3: "sam3.1_multiplex_fp16.safetensors",
+  wanAti: "Wan2_1-I2V-ATI-14B_fp8_e4m3fn.safetensors",
+  h3FunControl: "minimax_h3_fun_controlnet_union_pruned_int8_convrot.safetensors",
   film: "film_net_fp16.safetensors",
   qwenEdit: "qwen_image_edit_fp8_e4m3fn.safetensors",
   qwenClip: "qwen_2.5_vl_7b_fp8_scaled.safetensors",
@@ -38,6 +44,12 @@ export interface Capabilities {
   vace: boolean;
   wanMove: boolean;
   causvid: boolean;
+  /** Henshin's other models: SCAIL-2 (Recast), H3 Fun ControlNet (Replace), Wan 2.1 ATI (Motion paths). */
+  scail: boolean;
+  /** The 4-step-style distill LoRA SCAIL-2 runs with (6 steps instead of 40). */
+  scailFast: boolean;
+  h3FunControl: boolean;
+  ati: boolean;
   pack: {
     ghostRig: boolean;
     lensFilm: boolean;
@@ -65,6 +77,10 @@ export const NO_CAPABILITIES: Capabilities = {
   vace: false,
   wanMove: false,
   causvid: false,
+  scail: false,
+  scailFast: false,
+  h3FunControl: false,
+  ati: false,
   pack: { ghostRig: false, lensFilm: false, boxTrack: false, contactSheet: false },
   image: { qwen: false, kontext: false, upscale: false, plainAttention: false },
 };
@@ -87,6 +103,8 @@ export function detectCapabilities(info: ObjectInfo): Capabilities {
   const vaes = options("VAELoader", "vae_name");
   const interp = options("FrameInterpolationModelLoader", "model_name");
   const visions = options("CLIPVisionLoader", "clip_name");
+  const checkpoints = options("CheckpointLoaderSimple", "ckpt_name");
+  const patches = options("ModelPatchLoader", "name");
 
   const h3Base = has("MiniMaxH3ImageToVideo") && clips.includes(MODELS.h3Clip) && vaes.includes(MODELS.h3Vae) && vaes.includes(MODELS.h3AudioVae);
   const wanBase = clips.includes(MODELS.wanClip) && vaes.includes(MODELS.wanVae);
@@ -100,6 +118,18 @@ export function detectCapabilities(info: ObjectInfo): Capabilities {
     vace: wanBase && has("WanVaceToVideo") && unets.includes(MODELS.wanVace),
     wanMove: wanBase && has("WanMoveTrackToVideo") && unets.includes(MODELS.wanI2v) && visions.includes(MODELS.clipVision),
     causvid: loras.includes(MODELS.causvid),
+    scail:
+      wanBase &&
+      has("WanSCAILToVideo") &&
+      has("SCAIL2ColoredMask") &&
+      has("SAM3_VideoTrack") &&
+      unets.includes(MODELS.scail) &&
+      loras.includes(MODELS.scailDpo) &&
+      checkpoints.includes(MODELS.sam3) &&
+      visions.includes(MODELS.clipVision),
+    scailFast: loras.includes(MODELS.wanI2vDistill),
+    h3FunControl: h3Base && has("MiniMaxH3ReferenceToVideo") && has("MiniMaxH3FunControlNetApply") && unets.includes(MODELS.h3Ref2v) && patches.includes(MODELS.h3FunControl),
+    ati: wanBase && has("WanTrackToVideo") && unets.includes(MODELS.wanAti) && visions.includes(MODELS.clipVision),
     pack: {
       ghostRig: has("NovaGhostRig"),
       lensFilm: has("NovaLensFilm"),

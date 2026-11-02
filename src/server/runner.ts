@@ -52,6 +52,10 @@ export const FULL_CAPS: Capabilities = {
   vace: true,
   wanMove: true,
   causvid: true,
+  scail: true,
+  scailFast: true,
+  h3FunControl: true,
+  ati: true,
   pack: { ghostRig: true, lensFilm: true, boxTrack: true, contactSheet: true, matchColor: true, shutter: true, shotQc: true, filmLooks: LOOKS.map((l) => l.id), filmControls: true },
   image: { qwen: true, kontext: true, upscale: true, plainAttention: true },
 };

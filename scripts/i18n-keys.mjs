@@ -14,6 +14,7 @@ const DATA_FILES = [
   "src/lib/assets.ts",
   "src/lib/engines/specs.ts",
   "src/lib/engines/sizing.ts",
+  "src/lib/engines/henshinModels.ts",
 ];
 // Shown in the template browser; they come from ComfyUI's own template index.
 const EXTRA = ["Image", "Image Tools", "Video", "Video Tools", "Audio", "3D Model", "Vector", "LLM", "Node Basics", "Product & Ads", "Character & Fashion", "Brand & Design", "Foundation", "Applied", "Box"];
@@ -81,14 +82,14 @@ for (const file of UI_DIRS.flatMap((d) => walk(path.join(ROOT, d)))) {
   // Components that translate a plain label="…" themselves.
   for (const m of src.matchAll(/<(?:IconButton|Slider)\b[^>]*?\blabel="((?:[^"\\]|\\.)*)"/g)) add(m[1]);
   // Data lists shown through tr() at render time.
-  for (const m of src.matchAll(/\b(label|title|hint|plural|verb|blurb|message)\s*:\s*"((?:[^"\\]|\\.)*)"/g)) add(m[2]);
-  for (const m of src.matchAll(/const (STEPS|SIZE_SHORT|OUTPUT_LABEL|MOTION_LABEL|PROBLEMS)[^=]*=\s*([\s\S]*?);\n/g)) for (const l of m[2].matchAll(LIT)) add(l[1]);
+  for (const m of src.matchAll(/\b(label|title|hint|plural|verb|blurb|message|ok)\s*:\s*"((?:[^"\\]|\\.)*)"/g)) add(m[2]);
+  for (const m of src.matchAll(/const (STEPS|SIZE_SHORT|OUTPUT_LABEL|MOTION_LABEL|PROBLEMS|WORKFLOW_NOTE|WORKFLOW_NEEDS)[^=]*=\s*([\s\S]*?);\n/g)) for (const l of m[2].matchAll(LIT)) add(l[1]);
   // Henshin's "what's missing" lines.
   for (const m of src.matchAll(/return [^;]*\?[^;]*;/g)) if (/missingText|g\.\w+Source|g\.still/.test(m[0])) for (const l of m[0].matchAll(LIT)) add(l[1]);
 }
 for (const f of DATA_FILES) {
   const src = readFileSync(path.join(ROOT, f), "utf8");
-  for (const m of src.matchAll(/\b(label|plural|hint|title|note)\s*:\s*"((?:[^"\\]|\\.)*)"/g)) add(m[2]);
+  for (const m of src.matchAll(/\b(label|plural|hint|title|note|blurb)\s*:\s*"((?:[^"\\]|\\.)*)"/g)) add(m[2]);
   for (const m of src.matchAll(/=\s*\{\s*([^}]*)\}/g)) if (/KIND_LABEL/.test(src.slice(Math.max(0, m.index - 60), m.index))) for (const l of m[1].matchAll(LIT)) add(l[1]);
 }
 const runner = readFileSync(path.join(ROOT, "src/server/runner.ts"), "utf8");
@@ -97,10 +98,10 @@ for (const m of runner.matchAll(/\[\/[^\]]*\/,\s*"([^"]+)"\]/g)) add(m[1]);
 
 add(runner.match(/\?\? "([^"]+)";/)?.[1] ?? "Working");
 // Compile notes, shown through tr().
-for (const f of ["src/lib/engines/h3.ts", "src/lib/workflows/apply.ts"]) {
+for (const f of ["src/lib/engines/h3.ts", "src/lib/engines/wan.ts", "src/lib/workflows/apply.ts"]) {
   const src = readFileSync(path.join(ROOT, f), "utf8");
   for (const m of src.matchAll(/notes\.push\("((?:[^"\\]|\\.)*)"\)/g)) add(m[1]);
-  for (const m of src.matchAll(/const RIG_OFF_NOTE = "((?:[^"\\]|\\.)*)"/g)) add(m[1]);
+  for (const m of src.matchAll(/const (?:RIG_OFF|SILENT)_NOTE = "((?:[^"\\]|\\.)*)"/g)) add(m[1]);
 }
 // Sentences the server and shared code send people, written with say() (src/lib/say.ts).
 for (const file of walk(path.join(ROOT, "src")))

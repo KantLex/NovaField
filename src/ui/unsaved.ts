@@ -2,6 +2,7 @@
 
 import { useEffect, useId } from "react";
 import { tr } from "@/i18n";
+import { ask } from "./ask";
 
 // Editors with changes not yet saved. Leaving them in the app (another workflow, another page, a
 // new language, which re-renders the page) asks first, as closing the tab does.
@@ -22,5 +23,8 @@ export function useUnsaved(dirty: boolean) {
   }, [dirty, id]);
 }
 
+/** An editor holds changes not yet saved. */
+export const hasUnsaved = () => open.size > 0;
+
 /** True when nothing is unsaved, or the person agrees to drop it. */
-export const confirmDiscard = () => !open.size || confirm(tr("You have unsaved changes. Leave without saving them?"));
+export const confirmDiscard = async () => !open.size || ask(tr("You have unsaved changes. Leave without saving them?"), { ok: "Leave without saving", danger: true });

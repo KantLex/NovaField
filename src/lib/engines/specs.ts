@@ -120,7 +120,13 @@ export interface ShotSpec {
 
 export interface RecastSpec {
   kind: "recast";
+  /** "h3" (default) or "scail". The source is conformed for it: H3's clip or Wan's. */
+  model?: "h3" | "scail";
+  /** An imported workflow (its id) that runs this instead of the built-in models. */
+  engine?: string;
   source: Asset;
+  /** Who in the clip becomes the character: where they were clicked (0–1 of the frame) and when (seconds). Missing: the main person. */
+  target?: { x: number; y: number; t: number };
   character: Asset;
   extras: Asset[];
   notes: string;
@@ -131,6 +137,10 @@ export interface RecastSpec {
 
 export interface RestyleSpec {
   kind: "restyle";
+  /** "h3" (default) or "vace". The source is conformed for it: H3's clip or Wan's. */
+  model?: "h3" | "vace";
+  /** An imported workflow (its id) that runs this instead of the built-in models. */
+  engine?: string;
   source: Asset;
   styleRef?: Asset;
   style: string;
@@ -151,7 +161,11 @@ export interface BoxKey {
 
 export interface ReplaceSpec {
   kind: "replace";
-  /** Pre-processed to 16 fps at the Wan working size. */
+  /** "vace" (default) or "h3-control". */
+  model?: "vace" | "h3-control";
+  /** An imported workflow (its id) that runs this instead of the built-in models. */
+  engine?: string;
+  /** Conformed for the model: 16 fps at the Wan working size (VACE), or H3's 24 fps clip. */
   source: Asset;
   shape: "rect" | "ellipse";
   keys: BoxKey[];
@@ -161,6 +175,8 @@ export interface ReplaceSpec {
   feather?: number;
   replacement?: Asset;
   prompt: string;
+  /** H3 only: Draft 480p (default) or Studio 720p. */
+  quality?: Quality;
   seed: number;
 }
 
@@ -178,6 +194,10 @@ export interface PathTiming {
 
 export interface PathsSpec {
   kind: "paths";
+  /** "wanmove" (default) or "ati". */
+  model?: "wanmove" | "ati";
+  /** An imported workflow (its id) that runs this instead of the built-in models. */
+  engine?: string;
   image: Asset;
   /** Each path is a polyline in 0–1 image coordinates, first point = where the thing starts. */
   paths: PathPoint[][];

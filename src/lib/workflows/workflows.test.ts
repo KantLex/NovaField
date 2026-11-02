@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import serverInfo from "../../test/fixtures/object_info.min.json";
 import { toApi } from "../comfy/convert";
 import { apiNodes, errorsOf, validateGraph, warningsOf, type ObjectInfo } from "../comfy/validate";
-import { compile } from "../engines";
+import { blocker, compile } from "../engines";
 import { NO_CAPABILITIES } from "../engines/capabilities";
-import type { ShotSpec } from "../engines/specs";
+import { workflowFits } from "../engines/henshinModels";
+import type { JobSpec, ShotSpec } from "../engines/specs";
 import { applyValues, fillForShot, isEngine, SIZE_RATIOS, sizeFor } from "./apply";
 import { detectFields, detectOutput } from "./detect";
 import type { Field, Recipe, Role } from "./types";
@@ -349,6 +350,66 @@ describe("size by aspect ratio and pixels", () => {
     expect(Math.abs((two.width * two.height) / (base * 2) - 1)).toBeLessThan(0.05);
     const huge = sizeFor({ ...W, max: 2048 }, { ...H, max: 2048 }, 21 / 9, base * 4);
     expect(huge.width).toBeLessThanOrEqual(2048);
+  });
+});
+
+describe("Henshin through an imported workflow", () => {
+  const field = (id: string, role: Field["role"], kind: Field["kind"], value: Field["value"]): Field => {
+    const [node, input] = id.split(".");
+    return { id, node, input, kind, role, label: input, group: node, value, exposed: true, advanced: false };
+  };
+  const v2v: Recipe = {
+    id: "v2v",
+    name: "My v2v",
+    source: "v2v.json",
+    createdAt: 0,
+    updatedAt: 0,
+    graph: {
+      "1": { class_type: "LoadVideo", inputs: { file: "in.mp4" } },
+      "2": { class_type: "LoadImage", inputs: { image: "ref.png" } },
+      "3": { class_type: "CLIPTextEncode", inputs: { text: "" } },
+      "4": { class_type: "RandomNoise", inputs: { noise_seed: 0 } },
+    },
+    fields: [field("1.file", "video", "video", "in.mp4"), field("2.image", "image", "image", "ref.png"), field("3.text", "prompt", "text", ""), field("4.noise_seed", "seed", "seed", 0)],
+    output: "video",
+    fps: 24,
+    missing: [],
+    warnings: [],
+  };
+  const clip = { name: "clip.mp4", kind: "video" as const, url: "", width: 1280, height: 720, fps: 24, frames: 124, duration: 124 / 24 };
+  const pic = { name: "lead.png", kind: "image" as const, url: "" };
+
+  it("lists a workflow only in the modes whose footage it takes", () => {
+    expect((["recast", "restyle", "replace", "paths"] as const).filter((m) => workflowFits(v2v, m))).toEqual(["recast", "restyle", "replace", "paths"]);
+    const noPicture = { ...v2v, fields: v2v.fields.filter((f) => f.role !== "image") };
+    expect((["recast", "restyle", "replace", "paths"] as const).filter((m) => workflowFits(noPicture, m))).toEqual(["restyle", "replace"]);
+    expect(workflowFits({ ...v2v, output: "image" }, "restyle")).toBe(false);
+  });
+
+  it("gives the workflow the clip, the picture and what to do in words", () => {
+    const spec: JobSpec = { kind: "recast", engine: "v2v", source: clip, target: { x: 0.8, y: 0.5, t: 0 }, character: pic, extras: [], notes: "make it night", audio: "original", quality: "draft", seed: 7 };
+    const { graph, meta } = compile(spec, NO_CAPABILITIES, { recipes: { v2v } });
+    expect(graph["1"].inputs.file).toBe("clip.mp4");
+    expect(graph["2"].inputs.image).toBe("lead.png");
+    expect(graph["4"].inputs.noise_seed).toBe(7);
+    expect(String(graph["3"].inputs.text)).toMatch(/^Replace the person on the right of the frame in the video with the person in the reference picture\..*Direction: make it night\.$/);
+    expect(meta.engine).toBe("My v2v");
+    expect(blocker(spec, NO_CAPABILITIES, { recipes: { v2v } })).toBeNull();
+  });
+
+  it("describes in words what the workflow has no input for", () => {
+    const replace: JobSpec = { kind: "replace", engine: "v2v", source: clip, shape: "rect", keys: [{ f: 0, x: 0.05, y: 0.1, w: 0.2, h: 0.2 }], prompt: "a lamp", seed: 1 };
+    const r = compile(replace, NO_CAPABILITIES, { recipes: { v2v } });
+    expect(r.graph["3"].inputs.text).toBe("In the video, replace the thing at the top left of the frame with a lamp. Keep everything else exactly as it is.");
+    expect(r.meta.notes[0]).toMatch(/no input for the box track/);
+    const paths: JobSpec = { kind: "paths", engine: "v2v", image: pic, paths: [[{ x: 0.2, y: 0.5 }, { x: 0.8, y: 0.5 }], [{ x: 0.5, y: 0.9 }]], prompt: "a boat drifts", aspect: "16:9", seed: 1 };
+    expect(compile(paths, NO_CAPABILITIES, { recipes: { v2v } }).graph["3"].inputs.text).toBe("a boat drifts. The thing on the left moves to the right. Some things stay still.");
+  });
+
+  it("refuses a workflow that can't take the mode's footage", () => {
+    const t2v = { ...v2v, fields: v2v.fields.filter((f) => f.role !== "video") };
+    const spec: JobSpec = { kind: "restyle", engine: "t2v", source: clip, style: "clay", film: { look: "none", intensity: 1, grain: 0, halation: 0, vignette: 0, chromatic: 0, gateWeave: 0, streak: 0 }, filmOnGpu: false, audio: "original", quality: "draft", seed: 1 };
+    expect(blocker(spec, NO_CAPABILITIES, { recipes: { t2v: { ...t2v, id: "t2v" } } })).toMatch(/doesn't take what this mode gives it/);
   });
 });
 

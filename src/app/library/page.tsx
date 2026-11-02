@@ -16,6 +16,7 @@ import { isTakeDrag, takesFrom } from "@/ui/dragTakes";
 import { usePulse } from "@/ui/pulse";
 import { byDay, matchesFilter, TAKE_FILTERS, TakeCard, TakeViewer, type TakeFilter } from "@/ui/TakeCard";
 import { columnWidth, SidePanel, usePanelKeys, usePanelOpen } from "@/ui/SidePanel";
+import { ask } from "@/ui/ask";
 import { tr } from "@/i18n";
 import { useReveal } from "@/ui/reveal";
 import { useEvent } from "@/ui/useEvent";
@@ -277,7 +278,8 @@ function ProjectItem({ project, count, active, onPick, onDropTakes }: { project:
                 danger
                 onClick={async () => {
                   close();
-                  if (!confirm(tr("Delete the project “{name}”? Its takes ({n}) move to Unsorted; nothing is deleted.", { name: project.name, n: count }))) return;
+                  if (!(await ask(tr("Delete the project “{name}”? Its takes ({n}) move to Unsorted; nothing is deleted.", { name: project.name, n: count }), { ok: "Delete project", danger: true })))
+                    return;
                   try {
                     await remove(project.id);
                     toast(tr("Deleted “{name}”. Its takes are in Unsorted.", { name: project.name }), "done");

@@ -22,6 +22,7 @@ import { MissingPacks } from "@/ui/workflows/MissingPacks";
 import { SizeField } from "@/ui/workflows/SizeField";
 import { useForms, useRecipes } from "@/ui/workflows/store";
 import { useUnsaved } from "@/ui/unsaved";
+import { ask } from "@/ui/ask";
 import { tr } from "@/i18n";
 
 export const OUTPUT_LABEL = {
@@ -46,8 +47,8 @@ export function Detail({ id, onDeleted, initialMode = "run" }: { id: string; onD
   const [recipe, setRecipe] = useState<Detailed | null>(null);
   const [mode, setModeRaw] = useState<Mode>(initialMode);
   const [graphDirty, setGraphDirty] = useState(false);
-  const setMode = (m: Mode) => {
-    if (mode === "graph" && graphDirty && m !== "graph" && !confirm(tr("Leave graph mode without saving your changes?"))) return;
+  const setMode = async (m: Mode) => {
+    if (mode === "graph" && graphDirty && m !== "graph" && !(await ask(tr("Leave graph mode without saving your changes?"), { ok: "Leave without saving", danger: true }))) return;
     setModeRaw(m);
   };
   const { upsert, drop } = useRecipes();
@@ -112,7 +113,7 @@ export function Detail({ id, onDeleted, initialMode = "run" }: { id: string; onD
         <Button
           variant="danger"
           onClick={async () => {
-            if (!confirm(tr("Remove “{name}” from NovaField? The workflow file itself is not touched.", { name: recipe.name }))) return;
+            if (!(await ask(tr("Remove “{name}” from NovaField? The workflow file itself is not touched.", { name: recipe.name }), { ok: "Remove", danger: true }))) return;
             try {
               await request(`/api/workflows/${id}`, { method: "DELETE" });
             } catch (e) {

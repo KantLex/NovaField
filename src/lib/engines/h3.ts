@@ -1,5 +1,5 @@
 // MiniMax H3 graphs: shots (text / first-last frame / references / ghost-rig camera / extend)
-// and the H3 half of Henshin (recast, restyle).
+// and the H3 half of Henshin (recast, restyle, and replace through the Fun ControlNet).
 
 import { Graph, type Link, type NodeRef } from "../comfy/graph";
 import { forNode } from "../cinema/camera";
@@ -8,7 +8,7 @@ import type { Capabilities } from "./capabilities";
 import { filmSupport, MODELS } from "./capabilities";
 import { composeShotPrompt, resolveMentions } from "./prompt";
 import { H3_FPS, h3FramesAtMost, nearestAspect, planH3, QUALITY, sizeFor } from "./sizing";
-import type { FilmLab, RecastSpec, RestyleSpec, ShotSpec } from "./specs";
+import type { FilmLab, RecastSpec, ReplaceSpec, RestyleSpec, ShotSpec } from "./specs";
 import { say } from "@/lib/say";
 
 /** The note when a moving shot goes out without its previs (the ghost rig); the prompt bar offers to turn it on. */
@@ -284,6 +284,12 @@ export function compileShot(spec: ShotSpec, caps: Capabilities): Compiled {
   };
 }
 
+/** The person picked in a Recast source, by where they stand in the frame and, if not at the start, when. */
+export function whoAt(target: { x: number; t: number }): string {
+  const where = target.x < 0.36 ? "on the left of the frame" : target.x > 0.64 ? "on the right of the frame" : "in the middle of the frame";
+  return `the person ${where}${target.t >= 0.5 ? ` (as seen at ${target.t.toFixed(1)} s)` : ""}`;
+}
+
 function henshinPlan(source: RecastSpec["source"], quality: RecastSpec["quality"]) {
   const aspect = nearestAspect(source.width ?? 16, source.height ?? 9);
   const mp = Math.min(QUALITY[quality].megapixels, QUALITY.studio.megapixels);
@@ -323,7 +329,7 @@ export function compileRecastOrRestyle(spec: RecastSpec | RestyleSpec, caps: Cap
     // With no direction, everything but the person is copied. A direction ("make it night") may
     // change the scene too, so the background and light are no longer locked to the source.
     prompt = [
-      "<Picture 1> replaces the main person in <Video 1>.",
+      `<Picture 1> replaces ${spec.target ? whoAt(spec.target) : "the main person"} in <Video 1>${spec.target ? "; everyone else in it stays exactly as they are" : ""}.`,
       notesText
         ? "Copy <Video 1>'s body motion, gestures, timing, facial performance, camera movement and framing exactly."
         : "Copy <Video 1> exactly: the same body motion, gestures, timing, facial performance, camera movement, framing and background.",
@@ -356,6 +362,78 @@ export function compileRecastOrRestyle(spec: RecastSpec | RestyleSpec, caps: Cap
     graph: g.toJSON(),
     meta: {
       engine: `MiniMax H3 reference-to-video${turbo ? " Turbo" : ""}`,
+      prompt,
+      width: plan.width,
+      height: plan.height,
+      frames: plan.frames,
+      fps,
+      seconds: plan.frames / H3_FPS,
+      trimHead: 0,
+      output: "video",
+      notes,
+    },
+  };
+}
+
+/**
+ * Replace on H3: the Fun ControlNet repaints only inside the tracked box (the rest is the source,
+ * frame for frame), and reference-to-video draws what goes there from the words and the picture.
+ */
+export function compileReplaceH3(spec: ReplaceSpec, caps: Capabilities): Compiled {
+  const g = new Graph();
+  const notes: string[] = [];
+  const turbo = caps.h3RefTurbo;
+  const core = h3Core(g, true, turbo);
+  const plan = henshinPlan(spec.source, spec.quality ?? "draft");
+
+  const src = g.add("LoadVideo", { file: spec.source.name }, "Source clip");
+  const parts = g.add("GetVideoComponents", { video: src.out() });
+  const frames = g.add("ImageScale", { image: parts.out(0), upscale_method: "lanczos", width: plan.width, height: plan.height, crop: "center" }).out();
+  const track = g.add(
+    "NovaBoxTrackMask",
+    {
+      track: JSON.stringify({ shape: spec.shape, keys: spec.keys }),
+      width: plan.width,
+      height: plan.height,
+      frames: plan.frames,
+      feather: spec.feather ?? 0.1,
+      expand: spec.expand ?? 0.06,
+      images: frames,
+    },
+    "Box track",
+  );
+  const patch = g.add("ModelPatchLoader", { name: MODELS.h3FunControl }, "Fun ControlNet");
+  const model = g
+    .add(
+      "MiniMaxH3FunControlNetApply",
+      { model: core.model, model_patch: patch.out(), vae: core.vae, strength: 1, start_percent: 0, end_percent: 1, mask: track.out(0), source_video: frames },
+      "Repaint the box",
+    )
+    .out();
+
+  const inputs: Record<string, Link | string | number> = {
+    clip: core.clip,
+    width: plan.width,
+    height: plan.height,
+    length: plan.frames,
+    ref_image_size: "match",
+    vae: core.vae,
+    audio_vae: core.audioVae,
+  };
+  if (spec.replacement) inputs["ref_images.ref_image_0"] = loadImage(g, spec.replacement.name, "Replacement image");
+  const prompt = [
+    `In the masked area, ${spec.prompt.trim().replace(/[.\s]+$/, "")}${spec.replacement ? ", looking like <Picture 1>" : ""}.`,
+    "It moves naturally with the scene. Everything outside the mask stays exactly as in the source video.",
+  ].join(" ");
+  inputs.prompt = prompt;
+  const cond = g.add("MiniMaxH3ReferenceToVideo", inputs, "Replace");
+  const sampled = sample(g, { ...core, model }, cond.out(0), cond.out(1), spec.seed);
+  const fps = finish(g, core, sampled, { tiled: false, smooth: false, audio: parts.out(1), seed: spec.seed, prefix: "novafield/replace" });
+
+  return {
+    graph: g.toJSON(),
+    meta: {
+      engine: `MiniMax H3 + Fun ControlNet${turbo ? " Turbo" : ""}`,
       prompt,
       width: plan.width,
       height: plan.height,

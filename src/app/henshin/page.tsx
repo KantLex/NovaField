@@ -11,9 +11,10 @@ import { TakePlayer } from "@/ui/TakePlayer";
 import { TakeStrip } from "@/ui/TakeStrip";
 import { DEFAULT_FILM, randomSeed, useLive } from "@/ui/state";
 import { formatEta, estimateSeconds } from "@/ui/studio/PromptBar";
+import { creditsLabel, usdLabel } from "@/ui/cost";
 import { columnWidth, SidePanel, usePanelKeys, usePanelOpen } from "@/ui/SidePanel";
 import { tr } from "@/i18n";
-import { type G, KINDS, MODES, type Mode, useG } from "@/ui/henshin/state";
+import { clipOf, type G, KINDS, MODES, type Mode, modelOf, useG, workflowOf } from "@/ui/henshin/state";
 import { Stage } from "@/ui/henshin/Stage";
 import { ModePanel } from "@/ui/henshin/ModePanel";
 
@@ -27,22 +28,40 @@ export default function HenshinPage() {
   const [busy, setBusy] = useState(false);
   const panelOpen = usePanelOpen("henshin-settings");
   usePanelKeys({ right: "henshin-settings" });
-  const [pre, setPre] = useState<{ key: string; engine: string; line: string; blocker: string | null; issues: string[] } | null>(null);
+  const [pre, setPre] = useState<{ key: string; engine: string; line: string; blocker: string | null; issues: string[]; notes: string[]; cost: string | null } | null>(null);
   const mode = MODES.find((m) => m.id === g.mode)!;
   const stillAspect: Aspect = g.still?.width && g.still.height ? nearestAspect(g.still.width, g.still.height) : "16:9";
 
   const spec = useMemo((): JobSpec | null => {
     const seed = 1;
+    const source = clipOf(g);
+    // An imported workflow runs it in place of the built-in models.
+    const workflow = workflowOf(g);
+    const engine = workflow ? { engine: workflow } : {};
     switch (g.mode) {
       case "recast":
-        return g.h3Source && g.character
-          ? { kind: "recast", source: g.h3Source, character: g.character, extras: g.extras, notes: g.notes, audio: g.audio, quality: g.quality, seed }
+        return source && g.character
+          ? {
+              kind: "recast",
+              model: g.models.recast === "scail" ? "scail" : "h3",
+              ...engine,
+              source,
+              target: g.target,
+              character: g.character,
+              extras: g.extras,
+              notes: g.notes,
+              audio: g.audio,
+              quality: g.quality,
+              seed,
+            }
           : null;
       case "restyle":
-        return g.h3Source && (g.style.trim() || g.styleRef)
+        return source && (g.style.trim() || g.styleRef)
           ? {
               kind: "restyle",
-              source: g.h3Source,
+              model: g.models.restyle === "vace" ? "vace" : "h3",
+              ...engine,
+              source,
               styleRef: g.styleRef,
               style: g.style,
               film: { ...DEFAULT_FILM, look: g.look },
@@ -53,11 +72,24 @@ export default function HenshinPage() {
             }
           : null;
       case "replace":
-        return g.wanSource && g.keys.length && (g.replacePrompt.trim() || g.replacement)
-          ? { kind: "replace", source: g.wanSource, shape: g.shape, keys: g.keys, replacement: g.replacement, prompt: g.replacePrompt || "the replacement object", seed }
+        return source && g.keys.length && (g.replacePrompt.trim() || g.replacement)
+          ? {
+              kind: "replace",
+              model: g.models.replace === "h3-control" ? "h3-control" : "vace",
+              ...engine,
+              source,
+              shape: g.shape,
+              keys: g.keys,
+              replacement: g.replacement,
+              prompt: g.replacePrompt || "the replacement object",
+              quality: g.quality,
+              seed,
+            }
           : null;
       case "paths":
-        return g.still && g.paths.length ? { kind: "paths", image: g.still, paths: g.paths, timing: g.pathTiming, prompt: g.pathPrompt, aspect: stillAspect, seed } : null;
+        return g.still && g.paths.length
+          ? { kind: "paths", model: g.models.paths === "ati" ? "ati" : "wanmove", ...engine, image: g.still, paths: g.paths, timing: g.pathTiming, prompt: g.pathPrompt, aspect: stillAspect, seed }
+          : null;
     }
   }, [g, stillAspect]);
 
@@ -69,16 +101,26 @@ export default function HenshinPage() {
     const t = setTimeout(() => {
       api
         .preflight(spec)
-        .then((r) =>
-          current &&
+        .then((r) => {
+          if (!current) return;
+          const m = r.meta;
+          // How long a workflow takes isn't known; for ours it's estimated (Wan runs about 2.2× H3's pace).
+          const eta = m && !workflowOf(g) && m.width > 0 ? formatEta(estimateSeconds(m, true) * (modelOf(g).clip === "h3" ? 1 : 2.2)) : "";
+          const paid = r.paid?.length ?? 0;
           setPre({
             key: specKey,
-            engine: r.meta?.engine ?? "",
-            line: r.meta ? `${r.meta.width}×${r.meta.height}, ${r.meta.seconds.toFixed(1)} s, ${formatEta(estimateSeconds(r.meta, true) * (spec.kind === "replace" || spec.kind === "paths" ? 2.2 : 1))}` : "",
+            engine: m?.engine ?? "",
+            line: m ? [m.width > 0 ? `${m.width}×${m.height}` : "", m.seconds > 0 ? `${m.seconds.toFixed(1)} s` : "", eta].filter(Boolean).join(", ") : "",
             blocker: r.blocker,
             issues: r.issues.map((i) => `${i.classType}: ${tr(i.message)}`),
-          }),
-        )
+            notes: m?.notes ?? [],
+            cost: !paid
+              ? null
+              : r.price && creditsLabel(r.price)
+                ? tr("API model: {usd} ({credits}) per take, billed to your Comfy account", { usd: usdLabel(r.price), credits: creditsLabel(r.price)! })
+                : tr("API model: billed to your Comfy account per take"),
+          });
+        })
         .catch(() => current && setPre(null));
     }, 400);
     return () => {
@@ -170,6 +212,12 @@ export default function HenshinPage() {
                 <span className="text-ink/80">{pre.engine}</span>
                 <br />
                 <span className="readout text-[13px]">{pre.line}</span>
+                {pre.cost && (
+                  <>
+                    <br />
+                    <span className="text-daylight">{pre.cost}</span>
+                  </>
+                )}
               </>
             ) : spec ? (
               tr("Checking the graph…")
@@ -177,6 +225,13 @@ export default function HenshinPage() {
               tr(missingText(g))
             )}
           </p>
+          {pre?.key === specKey &&
+            !pre.blocker &&
+            pre.notes.map((n) => (
+              <p key={n} className="text-[12px] text-faint">
+                {tr(n)}
+              </p>
+            ))}
           {pre?.issues.map((i) => (
             <p key={i} className="text-[12px] text-tally">
               {i}
@@ -189,13 +244,14 @@ export default function HenshinPage() {
 }
 
 function missingText(g: G) {
+  const source = clipOf(g);
   switch (g.mode) {
     case "recast":
-      return !g.h3Source ? "Add a source clip." : "Add your character.";
+      return !source ? "Add a source clip." : "Add your character.";
     case "restyle":
-      return !g.h3Source ? "Add a source clip." : "Describe the new style or add a style image.";
+      return !source ? "Add a source clip." : "Describe the new style or add a style image.";
     case "replace":
-      return !g.wanSource ? "Add a source clip." : !g.keys.length ? "Box the object to replace." : "Say what it becomes.";
+      return !source ? "Add a source clip." : !g.keys.length ? "Box the object to replace." : "Say what it becomes.";
     case "paths":
       return !g.still ? "Add a still image." : "Draw at least one path.";
   }

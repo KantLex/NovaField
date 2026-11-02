@@ -14,12 +14,34 @@ A source clip can be a take (`{take: id}`), a library clip asset (`{asset: id}`)
 
 ## Which tool
 
-| The person wants… | Tool | Engine and limits |
+| The person wants… | Tool | Default engine and limits |
 |---|---|---|
 | A different person in the clip; same performance | `recast` | MiniMax H3 reference-to-video; source 2–15 s |
 | The clip in another medium or look (anime, clay, painting, a film stock) | `restyle` | MiniMax H3; source 2–15 s |
 | One thing in the clip turned into something else | `replace_object` | Wan 2.1 VACE at 16 fps; the first 5 s |
 | A still that moves the way they draw it | `animate_still` | WanMove + Wan 2.1 image-to-video; 5 s, the still's shape |
+
+## Which model
+
+Each tool takes `model`; both choices are recommended, the first is the default. `list_engines`
+says which ones the server has (`available`) and, if not, the files it `needs`. Respect a model
+the person names; otherwise keep the default unless the other suits the job better.
+
+| Tool | `model` | Choose it when |
+|---|---|---|
+| `recast` | `h3` (default) | Most clips: up to 15 s, keeps the sound, and `notes` can change the scene |
+| `recast` | `scail` | One clear person doing big body motion (dance, sport); 5 s at 16 fps, recasts the biggest person, one picture |
+| `restyle` | `h3` (default) | Looks that may reinterpret materials and light; up to 15 s with sound |
+| `restyle` | `vace` | Heavy styles (clay, pixel art, low-poly) where shapes and timing must hold; 5 s at 16 fps, no new sound |
+| `replace_object` | `vace` (default) | Short clips; only the box changes |
+| `replace_object` | `h3-control` | 24 fps, up to 15 s, keeps the clip's sound; takes `quality` |
+| `animate_still` | `wanmove` (default) | Precise paths and pins |
+| `animate_still` | `ati` | Looser, livelier motion along the same paths |
+
+To run a mode through the person's own imported workflow instead, pass `workflow` with its id:
+`list_engines` lists workflows with the Henshin modes each can run (`henshin`). The workflow gets
+the clip and pictures, and the instructions in its prompt (a box track or paths only in words). A
+workflow with paid API nodes costs credits: plan it first and show the price.
 
 ## recast
 

@@ -9,6 +9,7 @@ import { Scissors } from "lucide-react";
 import { useRef, useState } from "react";
 import type { Asset } from "@/lib/engines/specs";
 import { api, fail } from "../api";
+import { ask } from "@/ui/ask";
 import { tr } from "@/i18n";
 
 /** Shortest part both models take, in seconds: H3's 56 frames at 24 fps, Wan's 33 at 16. */
@@ -69,7 +70,7 @@ export function TrimBar({
   };
 
   const apply = async () => {
-    if (warn && !confirm(warn)) return;
+    if (warn && !(await ask(warn))) return;
     setBusy(true);
     try {
       onClip(await api.trim(clip, purpose, shown.start, fixed ? undefined : shown.end - shown.start));

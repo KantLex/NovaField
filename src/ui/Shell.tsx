@@ -16,7 +16,8 @@ import { useLiveFeed } from "./liveFeed";
 import { Logo } from "./Logo";
 import { ProjectSwitcher } from "./ProjectMenu";
 import { useLive } from "./state";
-import { confirmDiscard } from "./unsaved";
+import { AskHost } from "./ask";
+import { confirmDiscard, hasUnsaved } from "./unsaved";
 
 const NAV = [
   { href: "/", label: "Studio", tone: "tungsten" },
@@ -169,7 +170,10 @@ function LanguageMenu() {
             active={l.id === locale}
             onClick={() => {
               // A new language re-renders the page, so unsaved edits would go.
-              if (l.id !== locale && confirmDiscard()) setLocale(l.id);
+              if (l.id !== locale)
+                void confirmDiscard().then((ok) => {
+                  if (ok) void setLocale(l.id);
+                });
               close();
             }}
           >
@@ -187,16 +191,18 @@ export function Shell({ children }: { children: React.ReactNode }) {
   useLocaleSync();
   const locale = useLocale((s) => s.locale);
   const path = usePathname();
+  const router = useRouter();
   return (
     <div className="flex min-h-dvh flex-col">
       <header
         className="sticky top-0 z-40 flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-line/60 bg-surround/95 px-4 py-2.5 backdrop-blur sm:px-6"
         // Leaving the page from the header asks first when an editor has unsaved changes.
         onClickCapture={(e) => {
-          const a = (e.target as HTMLElement).closest("a[href]");
-          if (a && a.getAttribute("href") !== path && !confirmDiscard()) {
+          const href = (e.target as HTMLElement).closest("a[href]")?.getAttribute("href");
+          if (href && href !== path && hasUnsaved()) {
             e.preventDefault();
             e.stopPropagation();
+            void confirmDiscard().then((ok) => ok && router.push(href));
           }
         }}
       >
@@ -251,6 +257,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </main>
       <GradeSheet />
       <Toasts />
+      <AskHost />
     </div>
   );
 }

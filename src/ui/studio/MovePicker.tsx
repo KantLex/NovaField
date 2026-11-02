@@ -7,6 +7,7 @@ import { shotPath, type CustomRig } from "@/lib/cinema/custom";
 import { buildPath, CATEGORIES, MOVES, type Framing, type MoveCategory, type MoveLayer } from "@/lib/cinema/moves";
 import { MoveThumb } from "../MoveThumb";
 import { useStudio, type SavedMove } from "../state";
+import { ask } from "@/ui/ask";
 import { tr } from "@/i18n";
 import { useReveal } from "../reveal";
 
@@ -231,7 +232,7 @@ function SavedTile({ move, active, framing, onPick, onRemove }: { move: SavedMov
         <span className={clsx("truncate px-1.5 py-1 text-[12px] leading-tight", active ? "text-ink" : "text-dim group-hover:text-ink")}>{move.name}</span>
       </button>
       <button
-        onClick={() => confirm(tr("Delete the saved move “{name}”?", { name: move.name })) && onRemove()}
+        onClick={() => void ask(tr("Delete the saved move “{name}”?", { name: move.name }), { ok: "Delete", danger: true }).then((ok) => ok && onRemove())}
         className="absolute top-1 right-1 rounded bg-black/60 p-0.5 text-ink/70 opacity-0 transition-opacity group-hover:opacity-100 hover:text-ink focus:opacity-100"
         aria-label={tr("Delete {name}", { name: move.name })}
       >

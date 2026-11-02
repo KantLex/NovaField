@@ -15,6 +15,7 @@ import { QcMenu } from "./Qc";
 import { usePulse } from "./pulse";
 import { reuse, reuseTarget } from "./reuse";
 import { PICTURE_TARGETS, sendClip, sendTakePicture, sendToEdit } from "./sendTo";
+import { askText } from "@/ui/ask";
 import { tr } from "@/i18n";
 import { soundtrackFrom } from "./sequence";
 import { useStudio } from "./state";
@@ -147,8 +148,8 @@ export function TakeActions({ job, inline = false, without = [] }: { job: Job; i
       icon: <Pencil size={14} />,
       show: true,
       group: "more",
-      run: () => {
-        const name = window.prompt(tr("Name this take"), job.title)?.replace(/\s+/g, " ").trim();
+      run: async () => {
+        const name = (await askText(tr("Name this take"), job.title, { ok: "Rename" }))?.replace(/\s+/g, " ").trim();
         if (name && name !== job.title) return api.rename(job.id, name).catch(fail);
       },
     },

@@ -11,6 +11,7 @@ import { fail, toast } from "@/ui/api";
 import { IconButton } from "@/ui/controls";
 import { prepareAsset, useAssets } from "@/ui/assets/store";
 import { useStudio } from "@/ui/state";
+import { ask } from "@/ui/ask";
 import { tr } from "@/i18n";
 import { DescriptionInput, FileDrop, KindChips, NameInput } from "@/ui/assets/AssetForm";
 
@@ -129,7 +130,8 @@ export function Editor({ entry, onClose }: { entry: AssetEntry; onClose: () => v
                     <IconButton tone="overlay"
                       label={entry.items.length === 1 ? "Remove (the last file: removes the asset)" : "Remove"}
                       onClick={async () => {
-                        if (entry.items.length === 1 && !confirm(tr("This is “{name}”'s last file. Removing it removes the asset too.", { name: entry.name }))) return;
+                        if (entry.items.length === 1 && !(await ask(tr("This is “{name}”'s last file. Removing it removes the asset too.", { name: entry.name }), { ok: "Remove", danger: true })))
+                          return;
                         try {
                           if (!(await removeItem(entry.id, it.id))) {
                             toast(tr("“{name}” had no files left, so it was removed.", { name: entry.name }), "done");
@@ -174,7 +176,7 @@ export function Editor({ entry, onClose }: { entry: AssetEntry; onClose: () => v
 
       <button
         onClick={async () => {
-          if (!confirm(tr("Delete “{name}” and its {n} files? Takes made with it are kept.", { name: entry.name, n: entry.items.length }))) return;
+          if (!(await ask(tr("Delete “{name}” and its {n} files? Takes made with it are kept.", { name: entry.name, n: entry.items.length }), { ok: "Delete", danger: true }))) return;
           try {
             await remove(entry.id);
             onClose();
