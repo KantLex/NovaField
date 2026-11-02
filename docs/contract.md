@@ -83,7 +83,9 @@ them, the TypeScript tests read them.
 
 - Up to 8 boxes standing on the floor; extra entries are ignored. `at` is the centre `[x, z]`,
   `size` is `[width, height, depth]` in metres (default `[1, 1, 1]`, each at least 0.05), `rot` is
-  degrees about Y (default 0). `label` is for people and is ignored by the node.
+  degrees about Y (default 0). `label` is for people and is ignored by the node. The app may also
+  keep a `model` (a 3D take) on a set piece or an actor, and a `turn` and `action` on an actor, for
+  its own 3D plan and prompt; it strips them before sending the path, so the node never sees them.
 - Corners, index `yi*4 + sxi*2 + szi` with `y ∈ {0, height}`, `sx, sz ∈ {-1, 1}`:
   `lx = sx * width / 2`, `lz = sz * depth / 2`,
   `x = cx + lx cos(rot) + lz sin(rot)`, `z = cz - lx sin(rot) + lz cos(rot)`.

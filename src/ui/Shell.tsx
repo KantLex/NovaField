@@ -13,6 +13,7 @@ import { useToasts } from "./api";
 import { switchMode } from "./connection";
 import { Menu, MenuItem } from "./Menu";
 import { useLiveFeed } from "./liveFeed";
+import { Logo } from "./Logo";
 import { ProjectSwitcher } from "./ProjectMenu";
 import { useLive } from "./state";
 import { confirmDiscard } from "./unsaved";
@@ -199,8 +200,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
           }
         }}
       >
-        <Link href="/" className="badge-type text-[19px] leading-none tracking-tight">
-          Nova<span className="text-tungsten">Field</span>
+        <Link href="/" className="text-[20px] leading-none" aria-label="NovaField">
+          <Logo />
         </Link>
         <ProjectSwitcher />
         {/* No scrolling here: the active underline hangs below the bar, and a scroller would clip it. */}

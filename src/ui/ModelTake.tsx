@@ -142,7 +142,8 @@ async function open(el: HTMLElement, url: string, onGrab: () => void): Promise<V
   const THREE = await import("three");
   const { OrbitControls } = await import("three/addons/controls/OrbitControls.js");
   const { RoomEnvironment } = await import("three/addons/environments/RoomEnvironment.js");
-  const object = await load(THREE, url);
+  const { loadModel } = await import("./three/models");
+  const object = await loadModel(url);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -245,52 +246,9 @@ async function open(el: HTMLElement, url: string, onGrab: () => void): Promise<V
       scene.environment?.dispose();
       pmrem.dispose();
       renderer.dispose();
+      // Hand the context back now: browsers hold only a few, and drop the oldest past that.
+      renderer.forceContextLoss();
       renderer.domElement.remove();
     },
   };
-}
-
-/** The model as a three.js object, whichever of the common formats it is in. */
-async function load(THREE: typeof import("three"), url: string): Promise<import("three").Object3D> {
-  const ext = (/\.(\w+)(?:\?|$)/.exec(url)?.[1] ?? "").toLowerCase();
-  const plain = () => new THREE.MeshStandardMaterial({ color: 0xc9c3b8, roughness: 0.55, metalness: 0.05, side: THREE.DoubleSide });
-  if (ext === "glb" || ext === "gltf") {
-    const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
-    return (await new GLTFLoader().loadAsync(url)).scene;
-  }
-  if (ext === "obj") {
-    const { OBJLoader } = await import("three/addons/loaders/OBJLoader.js");
-    const obj = await new OBJLoader().loadAsync(url);
-    obj.traverse((o) => {
-      const m = o as import("three").Mesh;
-      if (m.isMesh) {
-        if (!m.geometry.attributes.normal) m.geometry.computeVertexNormals();
-        m.material = plain();
-      }
-    });
-    return obj;
-  }
-  if (ext === "fbx") {
-    const { FBXLoader } = await import("three/addons/loaders/FBXLoader.js");
-    return new FBXLoader().loadAsync(url);
-  }
-  if (ext === "stl" || ext === "ply") {
-    const geometry =
-      ext === "stl"
-        ? await new (await import("three/addons/loaders/STLLoader.js")).STLLoader().loadAsync(url)
-        : await new (await import("three/addons/loaders/PLYLoader.js")).PLYLoader().loadAsync(url);
-    const colored = !!geometry.attributes.color;
-    // A PLY without faces is a point cloud.
-    if (ext === "ply" && !geometry.index) {
-      return new THREE.Points(geometry, new THREE.PointsMaterial({ size: 0.01, vertexColors: colored, color: colored ? 0xffffff : 0xc9c3b8 }));
-    }
-    if (!geometry.attributes.normal) geometry.computeVertexNormals();
-    const material = plain();
-    if (colored) {
-      material.vertexColors = true;
-      material.color.set(0xffffff);
-    }
-    return new THREE.Mesh(geometry, material);
-  }
-  throw new Error(tr("This 3D file couldn't be opened here. Download it to open it in a 3D app."));
 }

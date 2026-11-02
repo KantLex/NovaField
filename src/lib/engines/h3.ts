@@ -2,6 +2,7 @@
 // and the H3 half of Henshin (recast, restyle).
 
 import { Graph, type Link, type NodeRef } from "../comfy/graph";
+import { forNode } from "../cinema/camera";
 import { isStill, shotPath } from "../cinema/custom";
 import type { Capabilities } from "./capabilities";
 import { filmSupport, MODELS } from "./capabilities";
@@ -137,13 +138,10 @@ export function save(g: Graph, video: NodeRef, prefix: string) {
 
 const loadImage = (g: Graph, name: string, title?: string) => g.add("LoadImage", { image: name }, title).out();
 
-export function compileShot(spec: ShotSpec, caps: Capabilities): Compiled {
-  const g = new Graph();
-  const notes: string[] = [];
+/** The camera path a shot renders, at H3's frame count and rate: what the ghost rig and the 3D guide both draw. */
+export function shotCameraPath(spec: ShotSpec) {
   const plan = planH3(spec.aspect, spec.quality, spec.duration);
-  if (plan.clamped) notes.push(say("Shortened to {seconds} s: H3 breaks down past this length at {size}.", { seconds: plan.seconds.toFixed(1), size: `${plan.width}×${plan.height}` }));
-
-  const cameraPath = shotPath({
+  return shotPath({
     move: spec.move,
     combo: spec.combo,
     size: spec.size,
@@ -156,19 +154,31 @@ export function compileShot(spec: ShotSpec, caps: Capabilities): Compiled {
     frames: plan.frames,
     fps: H3_FPS,
   });
+}
+
+export function compileShot(spec: ShotSpec, caps: Capabilities): Compiled {
+  const g = new Graph();
+  const notes: string[] = [];
+  const plan = planH3(spec.aspect, spec.quality, spec.duration);
+  if (plan.clamped) notes.push(say("Shortened to {seconds} s: H3 breaks down past this length at {size}.", { seconds: plan.seconds.toFixed(1), size: `${plan.width}×${plan.height}` }));
+
+  const cameraPath = shotCameraPath(spec);
   // A previs clip drives the camera in place of the preset move and its ghost rig.
   const previs = spec.off?.move ? null : (spec.previs ?? null);
-  const useRig = !previs && spec.cameraMode === "rig" && caps.pack.ghostRig && !isStill(cameraPath);
-  if (!previs && spec.cameraMode === "rig" && !caps.pack.ghostRig) notes.push("Previs needs the NovaField nodes; the camera move went into the prompt instead.");
+  // The 3D previs set, drawn by the app, guides H3 in place of the ghost rig (no nodes needed).
+  const guide = !previs && !spec.off?.move && spec.cameraMode === "rig" && spec.guide && !isStill(cameraPath) ? spec.guide : null;
+  const useRig = !previs && !guide && spec.cameraMode === "rig" && caps.pack.ghostRig && !isStill(cameraPath);
+  if (!previs && !guide && spec.cameraMode === "rig" && !caps.pack.ghostRig && !isStill(cameraPath)) notes.push("Previs needs the NovaField nodes; the camera move went into the prompt instead.");
   // A move told only in words is a suggestion H3 often reinterprets (a spiral can come out as a barrel roll).
   if (!previs && spec.cameraMode !== "rig" && caps.pack.ghostRig && !isStill(cameraPath)) notes.push(RIG_OFF_NOTE);
   if (previs && (previs.clip.duration ?? 2) < 2) notes.push("The previs clip is shorter than 2 s; H3 needs at least 2 s of reference video.");
-  const ref = spec.cast.length > 0 || useRig || !!previs;
+  const ref = spec.cast.length > 0 || useRig || !!previs || !!guide;
   const turbo = spec.turbo && (ref ? caps.h3RefTurbo : caps.h3Turbo);
   const core = h3Core(g, ref, turbo);
 
   const prompt = composeShotPrompt(spec, {
     rigVideoIndex: useRig ? 1 : undefined,
+    guideVideoIndex: guide ? 1 : undefined,
     previs: previs ? { index: 1, follow: previs.follow } : undefined,
     startFrame: !!spec.startFrame,
     path: cameraPath,
@@ -194,10 +204,11 @@ export function compileShot(spec: ShotSpec, caps: Capabilities): Compiled {
       const rig = g.add(
         "NovaGhostRig",
         {
-          camera_path: JSON.stringify(cameraPath),
+          camera_path: JSON.stringify(forNode(cameraPath)),
           width: Math.round(plan.width / 2 / 8) * 8,
           height: Math.round(plan.height / 2 / 8) * 8,
-          style: spec.rigStyle === "parallax" && !start ? "subject" : spec.rigStyle,
+          // The 3D set falls back to the node's figure scene when the app sent no guide (an agent's shot).
+          style: (spec.rigStyle === "parallax" && !start) || spec.rigStyle === "set3d" ? "subject" : spec.rigStyle,
           line_strength: 1,
           ...(spec.rigStyle === "parallax" && start ? { image: start } : {}),
         },
@@ -205,8 +216,8 @@ export function compileShot(spec: ShotSpec, caps: Capabilities): Compiled {
       );
       inputs["ref_videos.ref_video_0"] = rig.out(0);
     }
-    if (previs) {
-      const clip = g.add("LoadVideo", { file: previs.clip.name }, "Previs clip");
+    if (previs || guide) {
+      const clip = g.add("LoadVideo", { file: previs ? previs.clip.name : guide!.name }, previs ? "Previs clip" : "3D previs");
       inputs["ref_videos.ref_video_0"] = g.add("GetVideoComponents", { video: clip.out() }).out(0);
     }
     const cond = g.add("MiniMaxH3ReferenceToVideo", inputs, "Script + references");
@@ -256,7 +267,7 @@ export function compileShot(spec: ShotSpec, caps: Capabilities): Compiled {
   return {
     graph: g.toJSON(),
     meta: {
-      engine: `MiniMax H3 ${ref ? "reference" : spec.startFrame || spec.endFrame ? "image" : "text"}-to-video${turbo ? " Turbo" : ""}${useRig ? ` + previs${spec.rig ? " (custom)" : ""}` : ""}${previs ? " + previs clip" : ""}`,
+      engine: `MiniMax H3 ${ref ? "reference" : spec.startFrame || spec.endFrame ? "image" : "text"}-to-video${turbo ? " Turbo" : ""}${useRig ? ` + previs${spec.rig ? " (custom)" : ""}` : ""}${previs ? " + previs clip" : ""}${guide ? ` + 3D previs${spec.rig ? " (custom)" : ""}` : ""}`,
       prompt,
       width: plan.width,
       height: plan.height,
@@ -268,7 +279,7 @@ export function compileShot(spec: ShotSpec, caps: Capabilities): Compiled {
       output: "video",
       notes,
       // The planned move only describes the take when it drove it.
-      ...(previs ? { previs: previs.clip.url } : { cameraPath }),
+      ...(previs ? { previs: previs.clip.url } : { cameraPath, ...(guide ? { previs: guide.url } : {}) }),
     },
   };
 }

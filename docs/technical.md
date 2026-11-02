@@ -48,6 +48,36 @@ copy its camera path and ignore its look. The browser previs and the GPU node sh
 spec ([contract.md](contract.md)). Fixtures check that the TypeScript and Python versions agree to
 6 decimal places, so the move you see is the move that renders.
 
+The Plan view can also show the set in 3D (`src/ui/studio/plan3dScene.ts`, three.js, loaded when
+first opened). It draws the same rig: poses come from the shared camera maths, so a mark raised
+in 3D is the height the render uses. A set piece or stand-in can carry a 3D take (`model`, a file
+this app serves). The 3D plan and its lens view show the model in the set piece's box or at the
+stand-in's height, with a block figure as the default stand-in. A stand-in can also have a `turn`
+(which way it faces when standing) and an `action` (a motion on the spot, or its pace when it
+walks); the figure plays them and `describeBlocking()` puts them in the prompt. `model`, `turn`
+and `action` are app-only: `forNode()` strips them before the path goes to the node, which keeps
+drawing the box and the plain figure.
+
+Set pieces are drawn as what their names say (`src/ui/three/setPieces.ts`): a table on legs, a
+sofa, a car on wheels, a tree, steps, each filling its box, so the footprint and the node's box
+still match. `describeSet()` puts them in the prompt by where the opening camera sees them ("a
+table in the foreground, at frame left"). A standing stand-in can face another one; the prompt
+then says "facing the second person". The plan's Framing menu (`src/ui/studio/framing.ts`) puts
+mark A on a classic framing of the stand-ins (a wide, a two-shot, a medium shot, a close-up or an
+over-the-shoulder) with the lens for it, keeps the camera on its side of the line between two
+people, and moves the other marks by as much, so the rest of the move is kept.
+
+The 3D set is also the default guide (`rigStyle: "set3d"`). The monitor's lens view draws it
+through the shot's camera (`src/ui/three/lensRender.ts`). The camera-move tiles show each
+move through it too (`src/ui/MoveThumb.tsx`), all drawn by one shared WebGL renderer
+(`src/ui/three/tileRender.ts`) and copied into plain canvases, since a page can only hold a few
+WebGL contexts. On Create, the browser draws every frame
+of the shot the same way and sends the JPEG stills to `POST /api/guide`; ffmpeg turns them into a
+video and it's conformed like an `h3` upload. The shot carries it as `guide`, and H3 loads it as
+its reference video in place of `NovaGhostRig`, with a prompt naming the block figures. That path
+needs no node pack. A shot with `set3d` but no `guide` (one from an agent) falls back to the
+ghost rig's `subject` scene.
+
 Without the node pack, the same plan is turned into words, for example: "The camera arcs 74
 degrees around the subject… The main subject walks across the frame from left to right."
 
@@ -71,6 +101,11 @@ turns away a web page that points its own domain at this computer (DNS rebinding
 only accepted from the app's own pages, or from tools that send no `Origin` (the CLI, agents).
 `pnpm dev:lan` (`NOVAFIELD_LAN=1`, listening on every interface) also accepts any IP address, plus
 the names in `NOVAFIELD_ALLOWED_HOSTS`.
+
+Uploads go up to 2 GB (`MAX_UPLOAD_BYTES` in `src/lib/limits.ts`). The proxy buffers request
+bodies, and Next.js keeps only the first 10 MB unless told otherwise, which cut larger uploads
+short; `next.config.ts` raises that to the same limit, and the proxy refuses anything bigger with
+a 413 that says so.
 
 ## Feature internals
 

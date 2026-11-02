@@ -1,8 +1,9 @@
 // Custom camera rigs: a preset move forked into editable marks, plus stand-ins and follow.
 // Also turns any path into plain words, for the prompt when the rig is drawn by hand.
 
-import { actorPositions, basis, poseAt, type Actor, type CameraKey, type CameraPath, type Ease, type Follow, type Prop, type Vec3 } from "./camera";
+import { actorPositions, basis, GAITS, poseAt, type Actor, type CameraKey, type CameraPath, type Ease, type Follow, type Prop, type Vec3 } from "./camera";
 import { buildPath, composePath, type MoveContext, type MoveLayer } from "./moves";
+import { setPiece } from "./setPieces";
 
 export interface CustomRig {
   keys: CameraKey[];
@@ -80,6 +81,15 @@ export function forkRig(path: CameraPath): CustomRig {
   return { keys, ease: path.ease, actors: path.actors ?? [{ ...DEFAULT_ACTOR }], follow: path.follow ?? null, props: path.props ?? [] };
 }
 
+/** Which way a standing stand-in faces, degrees about Y (0 faces +z): its own turn, else toward the camera at `cam`. */
+export function facingOf(a: Actor, cam: Vec3): number {
+  if (a.turn !== undefined) return a.turn;
+  return (Math.atan2(cam[0] - a.from[0], cam[2] - a.from[1]) * 180) / Math.PI;
+}
+
+/** True when a stand-in has somewhere to walk to. */
+export const walks = (a: Actor) => a.to[0] !== a.from[0] || a.to[1] !== a.from[1];
+
 /** True when nothing moves: no point rendering a motion guide. */
 export function isStill(path: CameraPath): boolean {
   if (path.shake && path.shake.amount > 0) return false;
@@ -140,7 +150,41 @@ export function describePath(path: CameraPath): string {
   if (path.follow && path.actors?.[path.follow.actor]) parts.push("always keeping the subject framed as it moves");
 
   const blocking = describeBlocking(path);
-  return `${capitalise(parts.join(", "))}.${blocking ? ` ${blocking}` : ""}`;
+  const set = describeSet(path);
+  return `${capitalise(parts.join(", "))}.${blocking ? ` ${blocking}` : ""}${set ? ` ${set}` : ""}`;
+}
+
+
+/** Where the set pieces stand, as the opening camera sees them: near or far, left or right. */
+export function describeSet(path: CameraPath): string {
+  const props = path.props ?? [];
+  if (!props.length) return "";
+  const pose = poseAt(path, 0);
+  const cam = basis(pose);
+  const inCam = (x: number, z: number) => {
+    const v: Vec3 = [x - cam.pos[0], 0, z - cam.pos[2]];
+    return { side: v[0] * cam.right[0] + v[2] * cam.right[2], depth: v[0] * cam.forward[0] + v[2] * cam.forward[2] };
+  };
+  // The subject's distance: the first stand-in, else what the camera looks at.
+  const lead = path.actors?.[0];
+  const subject = lead ? inCam(lead.from[0], lead.from[1]).depth : inCam(pose.target[0], pose.target[2]).depth;
+  // Half the frame's width as a slope, for a 16:9 frame: near enough to tell left from right.
+  const halfWidth = Math.tan(((pose.fov * Math.PI) / 180) / 2) * (16 / 9);
+  const where: string[] = [];
+  for (const p of props) {
+    // A 3D take's set piece is named after the take.
+    const name = p.label ? (setPiece(p.label)?.words ?? `the ${p.label.trim().toLowerCase()}`) : "";
+    if (!name) continue;
+    const { side, depth } = inCam(p.at[0], p.at[1]);
+    // Behind the opening camera: it may swing into view, but there is nothing to say about framing.
+    if (depth < 0.3) continue;
+    const across = side / depth;
+    const near = depth < subject - 0.8 ? "in the foreground" : depth > subject + 0.8 ? "behind the subject" : "beside the subject";
+    const frame = Math.abs(across) < halfWidth * 0.25 ? "in the middle of the frame" : Math.abs(across) > halfWidth ? `just out of frame ${across > 0 ? "right" : "left"}` : `at frame ${across > 0 ? "right" : "left"}`;
+    where.push(`${name} ${near}, ${frame}`);
+  }
+  if (!where.length) return "";
+  return `On the set: ${where.length > 1 ? `${where.slice(0, -1).join("; ")}; and ${where[where.length - 1]}` : where[0]}.`;
 }
 
 /** Which way each stand-in walks, as seen from the opening camera. */
@@ -154,20 +198,62 @@ export function describeBlocking(path: CameraPath): string {
     const dx = a.to[0] - a.from[0];
     const dz = a.to[1] - a.from[1];
     if (Math.hypot(dx, dz) < 0.3) {
-      if (actors.length > 1) lines.push(`${names[i]} stays in place${a.height < 1.4 ? " (a child)" : ""}.`);
+      const doing = a.action && a.action !== "idle" && !(GAITS as readonly string[]).includes(a.action) ? STAND_WORDS[a.action] : "";
+      const facing = a.turn !== undefined ? (facingWhom(actors, i, names) ?? facingWords(a, cam)) : "";
+      if (doing || facing) lines.push(`${names[i]} ${doing || "stands"}${facing ? `${doing ? "," : ""} ${facing}` : ""}${a.height < 1.4 ? " (a child)" : ""}.`);
+      else if (actors.length > 1) lines.push(`${names[i]} stays in place${a.height < 1.4 ? " (a child)" : ""}.`);
       return;
     }
     const side = dx * cam.right[0] + dz * cam.right[2];
     const depth = dx * cam.forward[0] + dz * cam.forward[2];
+    const verb = a.action === "run" ? "runs" : "walks";
     const dir =
       Math.abs(side) >= Math.abs(depth)
-        ? `walks across the frame from ${side > 0 ? "left to right" : "right to left"}`
+        ? `${verb} across the frame from ${side > 0 ? "left to right" : "right to left"}`
         : depth > 0
-          ? "walks away from the camera"
-          : "walks toward the camera";
+          ? `${verb} away from the camera`
+          : `${verb} toward the camera`;
     lines.push(`${names[i]} ${dir}${walkWhen(a.start ?? 0, a.end ?? 1)}.`);
   });
   return lines.join(" ");
+}
+
+const STAND_WORDS: Record<string, string> = {
+  wave: "waves",
+  talk: "talks, gesturing with their hands",
+  point: "points ahead",
+  look: "looks around",
+  sit: "sits",
+  jump: "jumps on the spot",
+  dance: "dances",
+};
+
+/** "facing the second person" when a stand-in is turned toward another one (within 20°). */
+function facingWhom(actors: Actor[], i: number, names: string[]): string | null {
+  const a = actors[i];
+  if (a.turn === undefined) return null;
+  let best = -1;
+  let bestOff = 20;
+  for (let j = 0; j < actors.length; j++) {
+    if (j === i) continue;
+    const b = actors[j];
+    const to = (Math.atan2(b.from[0] - a.from[0], b.from[1] - a.from[1]) * 180) / Math.PI;
+    const off = Math.abs(((((a.turn - to) % 360) + 540) % 360) - 180);
+    if (off <= bestOff) [best, bestOff] = [j, off];
+  }
+  return best >= 0 ? `facing ${names[best].toLowerCase()}` : null;
+}
+
+/** Which way a turned stand-in faces, as the opening camera sees it. */
+function facingWords(a: Actor, cam: ReturnType<typeof basis>): string {
+  const th = (facingOf(a, cam.pos) * Math.PI) / 180;
+  const dir: Vec3 = [Math.sin(th), 0, Math.cos(th)];
+  // Toward the camera is against the camera's forward.
+  const toward = -(dir[0] * cam.forward[0] + dir[2] * cam.forward[2]);
+  const side = dir[0] * cam.right[0] + dir[2] * cam.right[2];
+  if (toward > 0.7) return "facing the camera";
+  if (toward < -0.7) return "with their back to the camera";
+  return `facing frame ${side > 0 ? "right" : "left"}`;
 }
 
 /** "", " halfway through the shot", " in the second half of the shot"… */

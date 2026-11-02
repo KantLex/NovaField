@@ -10,6 +10,7 @@ import type { Aspect, Asset } from "@/lib/engines/specs";
 import type { Job } from "@/lib/jobs";
 import { isLive } from "@/lib/jobs";
 import { PrevisTimeline } from "./PrevisTimeline";
+import { Lens3D } from "./Lens3D";
 import { RigView } from "./RigView";
 import { type RigStyle } from "./rig";
 import { tr } from "@/i18n";
@@ -89,16 +90,26 @@ export function Monitor({
               </motion.div>
             ) : path ? (
               <motion.div key="previs" className="absolute inset-0" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <RigView
-                  path={path}
-                  style={rigStyle}
-                  shared
-                  view={view === "plan" ? "overview" : "camera"}
-                  className={clsx("size-full transition-[filter] duration-500", live && "brightness-[0.45] saturate-50")}
-                  onFrame={(f) => {
-                    if (tcRef.current) tcRef.current.textContent = timecode(f, path.fps);
-                  }}
-                />
+                {rigStyle === "set3d" && view === "camera" ? (
+                  <Lens3D
+                    path={path}
+                    className={clsx("size-full transition-[filter] duration-500", live && "brightness-[0.45] saturate-50")}
+                    onFrame={(f) => {
+                      if (tcRef.current) tcRef.current.textContent = timecode(f, path.fps);
+                    }}
+                  />
+                ) : (
+                  <RigView
+                    path={path}
+                    style={rigStyle}
+                    shared
+                    view={view === "plan" ? "overview" : "camera"}
+                    className={clsx("size-full transition-[filter] duration-500", live && "brightness-[0.45] saturate-50")}
+                    onFrame={(f) => {
+                      if (tcRef.current) tcRef.current.textContent = timecode(f, path.fps);
+                    }}
+                  />
+                )}
                 <FrameLines />
                 {view === "camera" && <Guides />}
               </motion.div>

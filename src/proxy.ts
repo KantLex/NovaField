@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { MAX_UPLOAD_BYTES } from "@/lib/limits";
+import { say } from "@/lib/say";
 
 // The app has no accounts: anyone who can reach it can render, upload and install node packs. So it
 // listens on this computer only (pnpm dev), and here:
@@ -6,11 +8,12 @@ import { NextResponse, type NextRequest } from "next/server";
 //   domain at 127.0.0.1 (DNS rebinding) is refused, reads included. With NOVAFIELD_LAN=1
 //   (pnpm dev:lan) any IP address is fine too, and names listed in NOVAFIELD_ALLOWED_HOSTS;
 // - changes are only taken from the app's own pages (or from tools like the CLI, which send no
-//   Origin), so another site open in the same browser can't make them. Reads stay open.
+//   Origin), so another site open in the same browser can't make them. Reads stay open;
+// - a request bigger than the app takes is refused up front, rather than read in part.
 const SAFE = new Set(["GET", "HEAD", "OPTIONS"]);
 
 export function proxy(request: NextRequest) {
-  if (!allowedHost(request.headers.get("host"))) return refuse("NovaField only answers at this computer's own address (localhost).");
+  if (!allowedHost(request.headers.get("host"))) return refuse(say("NovaField only answers at this computer's own address (localhost)."));
   if (SAFE.has(request.method)) return;
   if (request.headers.get("sec-fetch-site") === "cross-site") return refuse();
   const origin = request.headers.get("origin");
@@ -23,6 +26,8 @@ export function proxy(request: NextRequest) {
     }
     if (host !== request.headers.get("host")) return refuse();
   } else if (origin === "null") return refuse();
+  if (Number(request.headers.get("content-length")) > MAX_UPLOAD_BYTES)
+    return NextResponse.json({ error: say("That file is too big: NovaField takes files up to {size} GB.", { size: MAX_UPLOAD_BYTES / 1024 ** 3 }) }, { status: 413 });
 }
 
 /** The Host a request was sent to: this computer, or (opted in) an address on the network. */
@@ -45,6 +50,6 @@ export function allowedHost(host: string | null, env: Record<string, string | un
   return ip || listed.includes(name);
 }
 
-const refuse = (error = "Changes are only accepted from NovaField itself.") => NextResponse.json({ error }, { status: 403 });
+const refuse = (error = say("Changes are only accepted from NovaField itself.")) => NextResponse.json({ error }, { status: 403 });
 
 export const config = { matcher: "/api/:path*" };

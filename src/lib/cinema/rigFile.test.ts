@@ -75,4 +75,19 @@ describe("camera path files", () => {
     expect(rig(JSON.stringify({ keys: [{ pos: [0, 1, 5], target: [0, 1, 0] }], actors: [] })).actors).toEqual([]);
     expect(rig(JSON.stringify({ keys: [{ pos: [0, 1, 5], target: [0, 1, 0] }] })).actors).toHaveLength(1);
   });
+
+  it("keeps a 3D take on a set piece or stand-in only when it's a file this app serves", () => {
+    const r = parseRigFile(
+      JSON.stringify({
+        keys: [{ pos: [0, 1, 5], target: [0, 1, 0] }],
+        actors: [{ from: [0, 0], model: "/api/files/media/abc.glb", turn: 270, action: "wave" }, { from: [1, 0], model: "https://example.com/x.glb", action: "fly" }],
+        props: [{ at: [0, -2], model: "/api/files/media/car.glb" }, { at: [2, -2], model: "/api/files/../../etc/passwd" }],
+      }),
+    );
+    if ("error" in r) throw new Error(r.error);
+    expect(r.rig.actors.map((a) => a.model)).toEqual(["/api/files/media/abc.glb", undefined]);
+    // Facing wraps into -180..180; only known motions are kept.
+    expect(r.rig.actors.map((a) => [a.turn, a.action])).toEqual([[-90, "wave"], [undefined, undefined]]);
+    expect(r.rig.props!.map((p) => p.model)).toEqual(["/api/files/media/car.glb", undefined]);
+  });
 });

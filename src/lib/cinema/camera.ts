@@ -20,7 +20,19 @@ export interface Actor {
   /** When the walk starts and ends, as fractions of the shot (default 0 and 1). */
   start?: number;
   end?: number;
+  /** A 3D take standing in for this person in the app's 3D plan. App-only: the node never sees it. */
+  model?: string;
+  /** Which way a standing figure faces, degrees about Y (0 faces +z). App-only; missing means toward the camera. */
+  turn?: number;
+  /** What it does: on the spot, or how it covers ground when it walks. App-only, for the 3D plan and the prompt. */
+  action?: Motion;
 }
+
+/** What a stand-in does on the spot. */
+export const STAND_MOTIONS = ["idle", "wave", "talk", "point", "look", "sit", "jump", "dance"] as const;
+/** How a stand-in covers ground between its marks. */
+export const GAITS = ["walk", "run"] as const;
+export type Motion = (typeof STAND_MOTIONS)[number] | (typeof GAITS)[number];
 
 /** A set piece (contract §1c): a box on the floor. `size` is [width, height, depth] in metres, `rot` degrees about Y. */
 export interface Prop {
@@ -29,6 +41,8 @@ export interface Prop {
   rot?: number;
   /** For people, not the node: "Table", "Wall"… */
   label?: string;
+  /** A 3D take shown in this box's place in the app's 3D plan, scaled to fill it. App-only: the node draws the box. */
+  model?: string;
 }
 
 export interface Follow {
@@ -47,6 +61,25 @@ export interface CameraPath {
   actors?: Actor[];
   follow?: Follow;
   props?: Prop[];
+}
+
+/** True for a file this app serves (a take's model), the only kind the 3D plan will load. */
+export const isAppFile = (url: string) => /^\/api\/files\/[\w./-]+$/.test(url) && !url.includes("..");
+
+/** The path as the node gets it: without the app-only fields (3D models, facing, motions), which mean nothing on the GPU server. */
+export function forNode(path: CameraPath): CameraPath {
+  const strip = <T extends object>(x: T): T => {
+    const y = { ...x } as Record<string, unknown>;
+    delete y.model;
+    delete y.turn;
+    delete y.action;
+    return y as T;
+  };
+  return {
+    ...path,
+    ...(path.actors ? { actors: path.actors.map(strip) } : {}),
+    ...(path.props ? { props: path.props.map(strip) } : {}),
+  };
 }
 
 export interface CameraPose {

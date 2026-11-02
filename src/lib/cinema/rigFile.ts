@@ -2,7 +2,7 @@
 // exported, shared, edited by hand or written by another tool (the Blender exporter in samples/),
 // and imported back as an editable custom move.
 
-import type { Actor, CameraKey, CameraPath, Ease, Follow, Prop, Vec3 } from "./camera";
+import { GAITS, isAppFile, STAND_MOTIONS, type Actor, type CameraKey, type CameraPath, type Ease, type Follow, type Prop, type Vec3 } from "./camera";
 import type { CustomRig } from "./custom";
 import { say } from "@/lib/say";
 
@@ -40,6 +40,9 @@ export function exportRig(path: CameraPath, name: string): string {
 const round = (v: number, d: number) => Math.round(v * 10 ** d) / 10 ** d;
 
 class Bad extends Error {}
+
+/** A 3D take's file, kept only when it's one this app serves; anything else is dropped, not an error. */
+const model = (v: unknown) => (typeof v === "string" && isAppFile(v) ? { model: v } : {});
 
 const num = (v: unknown, what: string, opts: { min?: number; max?: number; fallback?: number } = {}): number => {
   if (v === undefined || v === null) {
@@ -125,6 +128,9 @@ function readRig(data: unknown): RigFile {
         height: num(a.height, `${what}: height`, { min: 0.3, max: 3, fallback: 1.75 }),
         ...(a.start !== undefined ? { start: Math.min(1, Math.max(0, num(a.start, `${what}: start`))) } : {}),
         ...(a.end !== undefined ? { end: Math.min(1, Math.max(0, num(a.end, `${what}: end`))) } : {}),
+        ...model(a.model),
+        ...(typeof a.turn === "number" && Number.isFinite(a.turn) ? { turn: ((((a.turn + 180) % 360) + 360) % 360) - 180 } : {}),
+        ...((STAND_MOTIONS as readonly unknown[]).includes(a.action) || (GAITS as readonly unknown[]).includes(a.action) ? { action: a.action as Actor["action"] } : {}),
       });
     });
   }
@@ -148,6 +154,7 @@ function readRig(data: unknown): RigFile {
         size: p.size === undefined ? [1, 1, 1] : (vec(p.size, 3, `${what}: size`).map((v) => Math.max(0.05, v)) as Vec3),
         ...(p.rot !== undefined ? { rot: num(p.rot, `${what}: rot`) } : {}),
         ...(typeof p.label === "string" ? { label: p.label.slice(0, 40) } : {}),
+        ...model(p.model),
       });
     });
   }

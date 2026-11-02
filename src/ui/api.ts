@@ -64,6 +64,13 @@ export const api = {
   /** One frame through the real film grade on the GPU (the grade tool's exact check). */
   gradeFrame: (image: string, film: FilmLab, seed: number) => request<{ url: string }>("/api/grade/preview", { json: { image, film, seed } }),
   useTake: (id: string, purpose: Purpose) => request<Asset>(`/api/jobs/${id}/use`, { json: { purpose } }),
+  /** The 3D previs as H3's guide video, from its frames (JPEG stills, in order). */
+  guide: (frames: Blob[], fps: number) => {
+    const form = new FormData();
+    frames.forEach((f, i) => form.append("frame", f, `${String(i).padStart(4, "0")}.jpg`));
+    form.append("fps", String(fps));
+    return request<Asset>("/api/guide", { body: form });
+  },
   upload: (file: File, purpose: Purpose) => {
     const form = new FormData();
     form.append("file", file);

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- NovaField's mark (promo/src/Logo.tsx) on a near-black tile: a nova standing on a horizon drawn as an anamorphic flare. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1a1a17"/>
+      <stop offset="0.62" stop-color="#0b0b0a"/>
+      <stop offset="1" stop-color="#070707"/>
+    </linearGradient>
+  </defs>
+  <rect width="100" height="100" rx="22.5" fill="url(#tile)"/>
+  <g fill="#E4FF1A" transform="translate(5 10.4) scale(0.9)">
+    <path d="M50 10 C54.8 34.5 59.5 40.2 72 44 C59.5 47.8 54.8 53 50 74 C45.2 53 40.5 47.8 28 44 C40.5 40.2 45.2 34.5 50 10 Z"/>
+    <path d="M10 74 C30 71.6 40 70 50 70 C60 70 70 71.6 90 74 C70 76.4 60 78 50 78 C40 78 30 76.4 10 74 Z"/>
+  </g>
+</svg>

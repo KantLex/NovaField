@@ -88,7 +88,13 @@ export interface ShotSpec {
    * animatic): H3 follows its camera, and with "action" its blocking too, in place of the preset move.
    */
   previs?: { clip: Asset; follow: "camera" | "action" } | null;
-  rigStyle: "subject" | "stage" | "starfield" | "parallax";
+  /**
+   * The guide's scene: a ghost-rig style the node renders, or "set3d", the 3D previs set (stand-ins
+   * doing their motions, set pieces, 3D takes) the app draws through the camera and sends as `guide`.
+   */
+  rigStyle: "subject" | "stage" | "starfield" | "parallax" | "set3d";
+  /** The 3D previs set drawn through the shot's camera by the app: H3's guide in place of the ghost rig. */
+  guide?: Asset | null;
   lighting: string;
   film: FilmLab;
   /** Apply the film lab on the GPU (needs the NovaField pack); otherwise only the prompt mentions the stock. */

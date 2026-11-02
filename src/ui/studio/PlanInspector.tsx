@@ -1,33 +1,47 @@
 "use client";
 
 // The floor plan's inspector: whatever is selected (a set piece, a camera mark or its aim, a
-// stand-in) as fields to type into, plus saving the move by name.
+// stand-in) as fields to type into, plus saving the move by name. A 3D take can be a stand-in's body.
 
-import { Bookmark, Copy, Trash2 } from "lucide-react";
+import { Bookmark, ChevronDown, Copy, Trash2 } from "lucide-react";
 import { useState } from "react";
-import type { Actor, CameraKey, CameraPath, Prop, Vec3 } from "@/lib/cinema/camera";
-import { ACTOR_COLORS, type CustomRig } from "@/lib/cinema/custom";
+import { GAITS, STAND_MOTIONS, type Actor, type CameraKey, type CameraPath, type Motion, type Prop, type Vec3 } from "@/lib/cinema/camera";
+import { ACTOR_COLORS, facingOf, type CustomRig } from "@/lib/cinema/custom";
 import { fovFor, LENSES } from "@/lib/cinema/moves";
 import { toast } from "../api";
-import { Menu } from "../Menu";
+import { Menu, MenuItem } from "../Menu";
 import { useStudio } from "../state";
-import { keyLabel, lensOf, MAX_PROPS, PROP_RGB, type Handle } from "./planGeometry";
+import { ModelThumb, type ModelTake } from "./modelTakes";
+import { keyLabel, lensOf, MAX_PROPS, PROP_RGB, sameTurn, scaleBox, turnToward, type Handle } from "./planGeometry";
 import { tr } from "@/i18n";
 
 export function PlanInspector({
   sel,
   path,
+  takes,
+  in3d,
   onEdit,
   onGrab,
   onRemove,
 }: {
   sel: Handle | null;
   path: CameraPath;
+  /** 3D takes, to give a stand-in a body. */
+  takes: ModelTake[];
+  /** The plan is in 3D: say how to drag there. */
+  in3d?: boolean;
   onEdit: (fn: (r: CustomRig) => CustomRig) => void;
   onGrab: () => void;
   onRemove: () => void;
 }) {
   const box = "absolute right-3 bottom-3 flex max-w-[calc(100%-24px)] flex-wrap items-center gap-x-4 gap-y-2 rounded-md bg-black/70 px-3 py-2 text-[12px] backdrop-blur";
+  if (!sel && in3d) {
+    return (
+      <p className="pointer-events-none absolute inset-x-3 bottom-2.5 text-center text-[12px] text-ink/60">
+        {tr("Drag a mark across the floor, or up and down with Shift. Drag elsewhere to turn the view, right-drag to pan, scroll to zoom.")}
+      </p>
+    );
+  }
   if (!sel) {
     return (
       <p className="pointer-events-none absolute inset-x-3 bottom-2.5 text-center text-[12px] text-ink/60">
@@ -54,9 +68,25 @@ export function PlanInspector({
         <span className="font-semibold" style={{ color: `rgb(${PROP_RGB})` }}>
           {tr(pr.label ?? "Set piece")}
         </span>
-        <Mini label={tr("Width")} value={pr.size[0]} min={0.2} max={8} step={0.05} unit="m" onStart={onGrab} onChange={dim(0)} />
-        <Mini label={tr("Depth")} value={pr.size[2]} min={0.1} max={8} step={0.05} unit="m" onStart={onGrab} onChange={dim(2)} />
-        <Mini label={tr("Height")} value={pr.size[1]} min={0.1} max={4} step={0.05} unit="m" onStart={onGrab} onChange={dim(1)} />
+        {pr.model ? (
+          // A 3D take keeps its proportions: one size, its longest side.
+          <Mini
+            label={tr("Size")}
+            value={Math.max(...pr.size)}
+            min={0.2}
+            max={8}
+            step={0.05}
+            unit="m"
+            onStart={onGrab}
+            onChange={(v) => setProp((x) => ({ ...x, size: scaleBox(x.size, v) }))}
+          />
+        ) : (
+          <>
+            <Mini label={tr("Width")} value={pr.size[0]} min={0.2} max={8} step={0.05} unit="m" onStart={onGrab} onChange={dim(0)} />
+            <Mini label={tr("Depth")} value={pr.size[2]} min={0.1} max={8} step={0.05} unit="m" onStart={onGrab} onChange={dim(2)} />
+            <Mini label={tr("Height")} value={pr.size[1]} min={0.1} max={4} step={0.05} unit="m" onStart={onGrab} onChange={dim(1)} />
+          </>
+        )}
         <Mini label={tr("Turn")} value={pr.rot ?? 0} min={-180} max={180} step={5} unit="°" onStart={onGrab} onChange={(v) => setProp((x) => ({ ...x, rot: v }))} />
         <button
           onClick={() => {
@@ -123,12 +153,61 @@ export function PlanInspector({
   const setActor = (fn: (x: Actor) => Actor) => onEdit((r) => ({ ...r, actors: r.actors.map((x, i) => (i === sel.i ? fn({ ...x }) : x)) }));
   const start = a.start ?? 0;
   const end = a.end ?? 1;
+  // Walkers pick a pace; a stand-in on the spot picks what it does there.
+  const motions: readonly Motion[] = walking ? GAITS : STAND_MOTIONS;
+  const motion = a.action && motions.includes(a.action) ? a.action : motions[0];
+  // Who a standing stand-in faces: the camera (no turn of its own), another stand-in, or a turn set by hand.
+  const others = (path.actors ?? []).map((_, j) => j).filter((j) => j !== sel.i);
+  const faces = a.turn === undefined ? "cam" : String(others.find((j) => sameTurn(turnToward(a, ...path.actors![j].from), a.turn!)) ?? "own");
   return (
     <div className={box}>
       <span className="font-semibold" style={{ color: ACTOR_COLORS[sel.i % ACTOR_COLORS.length] }}>
         Stand-in {sel.i + 1}
       </span>
       <Mini label={tr("Height")} value={a.height} min={0.8} max={2.3} step={0.05} unit="m" onStart={onGrab} onChange={(v) => setActor((x) => ({ ...x, height: v }))} />
+      {(takes.length > 0 || a.model) && (
+        <Menu
+          label={tr("What stands in the 3D plan")}
+          trigger={() => (
+            <span className="flex items-center gap-1 text-ink/80 hover:text-ink">
+              <span className="text-ink/60">{tr("Body")}</span>
+              <span className="max-w-28 truncate">{a.model ? (takes.find((t) => t.model === a.model)?.title ?? tr("3D take")) : tr("Mannequin")}</span>
+              <ChevronDown size={12} />
+            </span>
+          )}
+        >
+          {(close) => (
+            <>
+              <p className="px-2.5 pt-1 pb-1.5 text-[12px] text-faint">{tr("Seen in the 3D plan. The render still gets a plain figure.")}</p>
+              <MenuItem
+                onClick={() => {
+                  close();
+                  onGrab();
+                  setActor((x) => {
+                    delete x.model;
+                    return x;
+                  });
+                }}
+              >
+                {tr("Mannequin")}
+              </MenuItem>
+              {takes.slice(0, 8).map((t) => (
+                <MenuItem
+                  key={t.id}
+                  onClick={() => {
+                    close();
+                    onGrab();
+                    setActor((x) => ({ ...x, model: t.model }));
+                  }}
+                >
+                  <ModelThumb take={t} />
+                  <span className="min-w-0 flex-1 truncate">{t.title}</span>
+                </MenuItem>
+              ))}
+            </>
+          )}
+        </Menu>
+      )}
       <Check
         label={tr("Walks")}
         checked={walking}
@@ -137,6 +216,79 @@ export function PlanInspector({
           setActor((x) => ({ ...x, to: on ? [x.from[0] + 2.5, x.from[1]] : [x.from[0], x.from[1]] }));
         }}
       />
+      <label className="flex items-center gap-1.5">
+        <span className="text-ink/60">{tr(walking ? "Pace" : "Motion")}</span>
+        <select
+          value={motion}
+          onChange={(e) => {
+            onGrab();
+            const v = e.target.value as Motion;
+            setActor((x) => ({ ...x, action: v }));
+          }}
+          className="rounded bg-white/10 px-1 py-0.5 text-[13px]"
+        >
+          {motions.map((m) => (
+            <option key={m} value={m}>
+              {tr(MOTION_LABEL[m])}
+            </option>
+          ))}
+        </select>
+      </label>
+      {!walking && (
+        <>
+          {others.length > 0 && (
+            <label className="flex items-center gap-1.5">
+              <span className="text-ink/60">{tr("Faces")}</span>
+              <select
+                value={faces}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "own") return;
+                  onGrab();
+                  setActor((x) => {
+                    if (v === "cam") delete x.turn;
+                    else x.turn = turnToward(x, ...path.actors![Number(v)].from);
+                    return x;
+                  });
+                }}
+                className="rounded bg-white/10 px-1 py-0.5 text-[13px]"
+              >
+                <option value="cam">{tr("The camera")}</option>
+                {others.map((j) => (
+                  <option key={j} value={j}>
+                    {tr("Stand-in")} {j + 1}
+                  </option>
+                ))}
+                {faces === "own" && <option value="own">{tr("Its own way")}</option>}
+              </select>
+            </label>
+          )}
+          <Mini
+            label={tr("Turn")}
+            value={Math.round(facingOf(a, path.keys[0].pos))}
+            min={-180}
+            max={180}
+            step={5}
+            unit="°"
+            onStart={onGrab}
+            onChange={(v) => setActor((x) => ({ ...x, turn: v }))}
+          />
+          {a.turn !== undefined && others.length === 0 && (
+            <button
+              onClick={() => {
+                onGrab();
+                setActor((x) => {
+                  delete x.turn;
+                  return x;
+                });
+              }}
+              className="text-ink/80 hover:text-ink hover:underline"
+            >
+              {tr("Face the camera")}
+            </button>
+          )}
+        </>
+      )}
       {walking && (
         <>
           <Mini label={tr("Sets off")} value={start * 100} min={0} max={95} step={5} unit="%" onStart={onGrab} onChange={(v) => setActor((x) => ({ ...x, start: v / 100, end: Math.max(x.end ?? 1, v / 100 + 0.05) }))} />
@@ -155,6 +307,19 @@ export function PlanInspector({
     </div>
   );
 }
+
+const MOTION_LABEL: Record<Motion, string> = {
+  idle: "Standing",
+  wave: "Waving",
+  talk: "Talking",
+  point: "Pointing",
+  look: "Looking around",
+  sit: "Sitting",
+  jump: "Jumping",
+  dance: "Dancing",
+  walk: "Walking",
+  run: "Running",
+};
 
 /** Keep a shaped move: it appears under Saved in the camera moves, stand-ins and set pieces included. */
 export function SaveMove({ rig }: { rig: CustomRig }) {

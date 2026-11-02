@@ -15,6 +15,8 @@ interface Previs {
   hud: boolean;
   /** Lens picture-in-picture in the Plan view. */
   inset: boolean;
+  /** The Plan view in 3D rather than from above. */
+  plan3d: boolean;
   set: (p: Partial<Omit<Previs, "set" | "seek">>) => void;
   seek: (frame: number) => void;
 }
@@ -34,13 +36,14 @@ export const usePrevis = create<Previs>()(
       safe: false,
       hud: true,
       inset: true,
+      plan3d: false,
       set: (p) => set(p),
       seek: (frame) => set({ frame, playing: false }),
     }),
     {
       name: "novafield-previs",
       storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ speed: s.speed, loop: s.loop, thirds: s.thirds, safe: s.safe, hud: s.hud, inset: s.inset }) as Previs,
+      partialize: (s) => ({ speed: s.speed, loop: s.loop, thirds: s.thirds, safe: s.safe, hud: s.hud, inset: s.inset, plan3d: s.plan3d }) as Previs,
     },
   ),
 );

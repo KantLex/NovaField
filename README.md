@@ -224,14 +224,27 @@ what it means. NovaField notices the new nodes by itself; there's nothing to cha
   handheld shake, light and film stock.
 - **Takes and coverage:** create one to four takes at once, or **coverage**: a wide, a medium
   and a close-up of the same moment.
-- **Plan view:** a floor plan seen from above, for shaping a move by hand.
+- **Plan view:** a floor plan seen from above, or the set in **3D**, for shaping a move by hand.
   - Drag the **A** and **B** marks to set where the camera starts and ends, and add points to
     bend its path. Drag the crosshairs to aim.
   - Add up to 3 **stand-ins** (child to tall) who walk between marks; **Camera follows** turns
     it into a tracking shot.
   - Add **set pieces** (tables, counters, cars, walls) so the shot is framed around the set.
+  - Switch to **3D** to orbit the set: drag the marks across the floor, or up and down with Shift
+    for crane and drone moves. Stand-ins become mannequins that walk their marks, and the lens
+    view shows the shot from the camera.
+  - Give each stand-in a **motion**: on the spot (wave, talk, point, look around, sit, jump,
+    dance) or a pace when it walks (walk or run). Turn a standing one with its floor arrow or
+    the **Turn** slider. Both play in the 3D plan and are written into the prompt.
+  - **The 3D set is the previs H3 follows.** "Through the lens" shows it through the shot's
+    camera, and on **Create** NovaField draws it frame by frame as the guide video: the move, the
+    stand-ins and their motions, the set pieces and 3D takes. It needs no node pack. The node
+    pack's wireframe scenes (Figure, Empty set, Stars, Photo 2.5D) are still there under **Rig scene**.
+  - Your **3D takes** can be set pieces, sized to keep their proportions, or a stand-in's body.
+    With the 3D set as the previs, the render's guide shows them too.
   - Drag the A and B marks on the timeline to change when the camera reaches each one.
-  - ⌘Z undoes, arrow keys nudge, and **Save** keeps the move for later.
+  - ⌘Z undoes, arrow keys nudge, Page Up and Page Down raise and lower a camera mark, and
+    **Save** keeps the move for later.
 - **Bring your own previs:** drop a blockout, a phone walk-through or an animatic, and the
   model follows its camera (and its blocking if you want). Camera moves also import and export as
   JSON, including from Blender with `samples/blender_export_novafield.py`.

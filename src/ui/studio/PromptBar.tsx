@@ -12,6 +12,7 @@ import { Segmented } from "../controls";
 import { randomSeed, useLive, useStudio, type ShotDraft } from "../state";
 import { prepareAsset, ensureAssets, useAssets } from "../assets/store";
 import { useEngineOutput } from "./engine";
+import { guideFor, usesGuide } from "./guide";
 import { MentionMenu, suggestionsFor, type Suggestion } from "./MentionMenu";
 import { creditsLabel, priceDetail, usdLabel } from "../cost";
 import { onReuseFocus } from "../reuse";
@@ -24,7 +25,8 @@ export function draftToSpec(d: ShotDraft, seed: number, over: Partial<ShotSpec> 
   const pack = useLive.getState().status?.caps.pack;
   return {
     ...rest,
-    cameraMode: pack?.ghostRig ? rest.cameraMode : "prompt",
+    // The 3D set's guide is drawn here, so it needs no nodes; the ghost rig's scenes do.
+    cameraMode: pack?.ghostRig || rest.rigStyle === "set3d" ? rest.cameraMode : "prompt",
     filmOnGpu: pack?.lensFilm ? rest.filmOnGpu : false,
     kind: "shot",
     seed,
@@ -148,6 +150,23 @@ export function PromptBar() {
       const specs: ShotSpec[] = coverage
         ? (["wide", "medium", "close"] as const).map((size) => draftToSpec(shot, shot.lockSeed ?? randomSeed(), { size }))
         : Array.from({ length: shot.takes }, () => draftToSpec(shot, shot.lockSeed ?? randomSeed()));
+      // The 3D previs guide, drawn once per framing: coverage frames each size differently. If it
+      // can't be drawn (no WebGL, say), the take still goes ahead without it.
+      if (specs.some(usesGuide)) {
+        toast("Drawing the 3D previs for H3 to follow…");
+        const guides = new Map<string, Promise<ShotSpec["guide"]>>();
+        let failed = false;
+        const draw = (s: ShotSpec) =>
+          guideFor(s).catch(() => {
+            failed = true;
+            return null;
+          });
+        for (const s of specs) {
+          if (!guides.has(s.size)) guides.set(s.size, draw(s));
+          s.guide = await guides.get(s.size);
+        }
+        if (failed) toast("Couldn't draw the 3D previs, so the take goes ahead without it.");
+      }
       const jobs = await api.submit(specs);
       setFocus(jobs[0].id);
       toast(coverage ? "Creating coverage: wide, medium and close." : jobs.length > 1 ? tr("Creating {n} takes.", { n: jobs.length }) : "Creating your take.");

@@ -43,6 +43,24 @@ MiniMax H3 的參考影片輸入，並以提示詞要求 H3 複製它的攝影�
 GPU 節點共用同一份攝影機規格（[contract.md](contract.md)）。測試資料會檢查 TypeScript 與 Python
 兩個版本的結果一致到小數點後 6 位，所以你看到的運鏡就是實際渲染的運鏡。
 
+平面圖也可以用 3D 顯示佈景（`src/ui/studio/plan3dScene.ts`，three.js 在第一次開啟時才載入）。它畫的是同一套運鏡：
+姿態來自共用的攝影機計算，所以在 3D 中升高的標記，就是渲染時使用的高度。佈景道具和替身可以帶一個 3D 鏡次
+（`model`，由本應用程式提供的檔案）。3D 平面圖和它的鏡頭檢視會把模型放進佈景道具的方塊中，或依替身的身高顯示；
+替身預設是方塊組成的人形。替身也可以有 `turn`（站立時的朝向）和 `action`（原地的動作，或走動時的步調）；人形會播放它們，
+`describeBlocking()` 會把它們寫進提示詞。`model`、`turn` 和 `action` 只在應用程式內使用：路徑送到節點之前，`forNode()` 會把它們移除，
+節點仍然畫方塊和簡單的人形。
+
+佈景道具會畫成名稱所說的樣子（`src/ui/three/setPieces.ts`）：有腳的桌子、沙發、有輪子的汽車、樹、階梯等，每一件都填滿自己的方塊，
+所以地面佔位和節點的方塊仍然一致。`describeSet()` 會依開場攝影機看到的位置，把佈景道具寫進提示詞（「前景、畫面左邊有一張桌子」）。
+站著的替身可以面向另一個替身，這時提示詞會寫「面向第二個人」。平面圖的「構圖」選單（`src/ui/studio/framing.ts`）會把標記 A
+放到替身的經典構圖（全景、雙人鏡頭、中景、特寫或過肩鏡頭）並換上合適的鏡頭，攝影機保持在兩人連線的同一側，
+其他標記也移動同樣的距離，所以運鏡的其餘部分會保留下來。
+
+3D 佈景也是預設的引導（`rigStyle: "set3d"`）。監看畫面的鏡頭檢視會透過鏡頭的攝影機畫出它（`src/ui/three/lensRender.ts`）。運鏡縮圖也會透過它呈現每種運鏡（`src/ui/MoveThumb.tsx`）。由於一個頁面只能有少數幾個 WebGL 情境，所有縮圖都由同一個共用的 WebGL 渲染器（`src/ui/three/tileRender.ts`）繪製，再複製到一般的畫布上。
+按下生成時，瀏覽器會用同樣方式畫出鏡頭的每一格，把 JPEG 靜態圖送到 `POST /api/guide`；ffmpeg 把它們做成影片，再像 `h3` 上傳一樣調整規格。
+鏡頭以 `guide` 帶著它，H3 會把它當參考影片載入，取代 `NovaGhostRig`，提示詞也會提到方塊人形。這條路徑不需要節點包。
+帶 `set3d` 但沒有 `guide` 的鏡頭（來自代理的）會改用鬼影機位的 `subject` 場景。
+
 沒有節點包時，同樣的運鏡規劃會轉換成文字，例如："The camera arcs 74
 degrees around the subject… The main subject walks across the frame from left to right."
 
@@ -62,6 +80,9 @@ NovaField 從不清空佇列，也不會盲目中斷。它只取消自己的提�
 每個 `/api` 請求都必須是發給 `localhost` 或回送 IP，因此把自己的網域指向這台電腦的網頁（DNS rebinding）會被拒絕。
 只有應用程式自己的頁面，或不送 `Origin` 的工具（CLI、代理）能做變更。
 `pnpm dev:lan`（`NOVAFIELD_LAN=1`，在所有網路介面上監聽）還會接受任何 IP 位址，以及 `NOVAFIELD_ALLOWED_HOSTS` 列出的名稱。
+
+上傳最多 2 GB（`src/lib/limits.ts` 的 `MAX_UPLOAD_BYTES`）。代理會緩衝請求內容，而 Next.js 預設只保留前 10 MB，較大的上傳因此會被截斷；
+`next.config.ts` 把這個上限提高到同樣的值，超過的請求由代理以 413 回應並說明原因。
 
 ## 功能內部運作
 

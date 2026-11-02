@@ -2,6 +2,7 @@
 
 import { execFile } from "node:child_process";
 import { mkdir } from "node:fs/promises";
+import path from "node:path";
 import { promisify } from "node:util";
 import { UNDER_LEVEL } from "@/lib/sequence";
 import { FFMPEG, FFPROBE } from "./config";
@@ -65,6 +66,11 @@ export async function conformForH3(input: string, output: string, frames: number
     "-c:a", "aac", "-b:a", "192k",
     output,
   ]);
+}
+
+/** A video from numbered stills (0000.jpg, 0001.jpg…) in `dir`, at `fps`: the 3D previs guide the browser drew. */
+export async function stillsToVideo(dir: string, fps: number, output: string) {
+  await ffmpeg(["-framerate", String(fps), "-i", path.join(dir, "%04d.jpg"), "-c:v", "libx264", "-crf", "16", "-pix_fmt", "yuv420p", "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", output]);
 }
 
 /** Wan source: 16 fps, exactly width×height (cover crop), `frames` frames. */

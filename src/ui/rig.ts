@@ -87,7 +87,8 @@ const STAGE = buildStage();
 const SUBJECT = buildSubject();
 const STARS = buildStars();
 
-export type RigStyle = "stage" | "subject" | "starfield" | "parallax";
+/** The ghost rig's scenes, plus "set3d": the 3D previs set, which the wireframe draws as "subject". */
+export type RigStyle = "stage" | "subject" | "starfield" | "parallax" | "set3d";
 
 const COLORS = { grid: "58,58,54", axis: "120,120,110", pillar: "150,150,140", subject: "228,255,26", prop: "214,206,184" };
 
@@ -154,7 +155,7 @@ export function drawScene(
     return;
   }
 
-  const figures = style === "subject" || style === "parallax";
+  const figures = style === "subject" || style === "parallax" || style === "set3d";
   const set = cast?.props?.length ? [...STAGE, ...propSegments(cast.props)] : STAGE;
   const segs: (Seg & { rgb?: string })[] = !figures ? set : cast?.actors && cast.positions ? [...set, ...actorSegments(cast.actors, cast.positions)] : [...set, ...SUBJECT];
   for (const s of segs) {

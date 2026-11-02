@@ -58,6 +58,9 @@ export function DirectorPanel() {
   const cloud = useLive((s) => s.status?.mode === "cloud");
   // A previs clip drives MiniMax H3's camera; imported workflows have no slot for it.
   const previsOn = !!shot.previs && !custom;
+  // The 3D set's guide is drawn in the browser, so previs works without the nodes; the ghost rig's scenes need them.
+  const set3d = shot.rigStyle === "set3d";
+  const guideReady = rigReady || set3d;
 
   return (
     <div className="flex flex-col gap-6">
@@ -138,7 +141,7 @@ export function DirectorPanel() {
       {!still && (
       <Section
         title={tr("Camera move")}
-        aside={previsOn ? "Follows your previs" : rigReady ? "Rendered on the GPU" : "Described in the prompt"}
+        aside={previsOn ? "Follows your previs" : shot.cameraMode === "rig" && set3d ? "Follows your 3D set" : rigReady ? "Rendered on the GPU" : "Described in the prompt"}
         enabled={sw("move")}
         offNote={tr("Off: no camera direction or previs. The model moves the camera as your script suggests.")}
       >
@@ -213,14 +216,20 @@ export function DirectorPanel() {
             {!custom && (
               <Toggle
                 label={tr("Previs")}
-                hint={rigReady ? "Renders this move as a wireframe guide video and makes H3 follow it" : "Makes H3 follow this exact move with a wireframe guide video"}
-                checked={shot.cameraMode === "rig" && rigReady}
-                disabled={!rigReady}
+                hint={
+                  set3d
+                    ? "Draws your 3D set through the camera as a guide video and makes H3 follow it: the move, the stand-ins and what they do"
+                    : rigReady
+                      ? "Renders this move as a wireframe guide video and makes H3 follow it"
+                      : "Makes H3 follow this exact move with a wireframe guide video"
+                }
+                checked={shot.cameraMode === "rig" && guideReady}
+                disabled={!guideReady}
                 onChange={(on) => patch({ cameraMode: on ? "rig" : "prompt" })}
               />
             )}
-            {!custom && !rigReady && <NodesCallout feature={tr("Previs")} />}
-            {!custom && shot.cameraMode === "rig" && rigReady && (
+            {!custom && !guideReady && <NodesCallout feature={tr("Previs")} />}
+            {!custom && shot.cameraMode === "rig" && guideReady && (
               <Segmented
                 label={tr("Rig scene")}
                 size="sm"
@@ -228,25 +237,33 @@ export function DirectorPanel() {
                 onChange={(rigStyle) => patch({ rigStyle })}
                 options={[
                   {
+                    id: "set3d",
+                    label: "3D set",
+                    title: "Your 3D set as the monitor shows it: stand-ins doing their motions, set pieces and 3D takes",
+                  },
+                  {
                     id: "subject",
                     label: "Figure",
                     title: "Grid floor, pillars and a stand-in figure",
+                    disabled: !rigReady,
                   },
                   {
                     id: "stage",
                     label: "Empty set",
                     title: "Grid floor and pillars",
+                    disabled: !rigReady,
                   },
                   {
                     id: "starfield",
                     label: "Stars",
                     title: "Points in space, for aerial and FPV moves",
+                    disabled: !rigReady,
                   },
                   {
                     id: "parallax",
                     label: "Photo 2.5D",
                     title: "Moves through your first frame in depth",
-                    disabled: !shot.startFrame,
+                    disabled: !rigReady || !shot.startFrame,
                   },
                 ]}
               />

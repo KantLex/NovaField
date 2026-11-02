@@ -41,7 +41,7 @@ const tags = (ix: number[]) => {
 
 export function composeShotPrompt(
   spec: ShotSpec,
-  opts: { rigVideoIndex?: number; previs?: { index: number; follow: "camera" | "action" }; startFrame: boolean; path?: CameraPath; plain?: boolean },
+  opts: { rigVideoIndex?: number; guideVideoIndex?: number; previs?: { index: number; follow: "camera" | "action" }; startFrame: boolean; path?: CameraPath; plain?: boolean },
 ): string {
   const size = SHOT_SIZES.find((s) => s.id === spec.size)!;
   const angle = ANGLES.find((a) => a.id === spec.angle)!;
@@ -89,6 +89,15 @@ export function composeShotPrompt(
     parts.push(`Camera: ${describeLayers(spec.combo)}${(spec.shake ?? 0) > 0.25 ? ", handheld with natural shake" : ""}.`);
   } else {
     parts.push(`Camera: ${move.prompt}${spec.intensity < 0.6 ? ", subtle and slow" : spec.intensity > 1.25 ? ", fast and dramatic" : ""}${(spec.shake ?? 0) > 0.25 ? ", handheld with natural shake" : ""}.`);
+  }
+  if (opts.guideVideoIndex) {
+    const v = `<Video ${opts.guideVideoIndex}>`;
+    const people = opts.path?.actors?.length ?? 0;
+    parts.push(
+      `Match the camera path of ${v} exactly: its position, direction, speed and timing.${
+        people > 1 || (spec.rig && describeBlocking(opts.path!)) ? ` The people are placed, face and move exactly like the block figures in ${v}.` : ""
+      }${opts.path && !opts.path.actors ? ` Its block figure only marks where the subject is; it is not a person unless the script has one.` : ""}${opts.path?.props?.length ? ` The furniture and objects stand where its plain shapes stand, as real things.` : ""} ${v} is only a rough 3D blockout; never show its grid, block figures, plain shapes or colours, and never copy its look.`,
+    );
   }
   if (opts.rigVideoIndex) {
     const people = opts.path?.actors?.length ?? 0;

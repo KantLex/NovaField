@@ -100,7 +100,7 @@ export const DEFAULT_SHOT: ShotDraft = {
   shake: 0,
   cameraMode: "rig",
   previs: null,
-  rigStyle: "subject",
+  rigStyle: "set3d",
   lighting: "natural",
   film: DEFAULT_FILM,
   filmOnGpu: true,
@@ -158,7 +158,13 @@ export const useStudio = create<Studio>()(
     {
       name: "novafield-studio",
       storage: createJSONStorage(() => localStorage),
-      version: 1,
+      version: 2,
+      // Version 2 made the 3D set the default previs; a shot still on the old default moves to it.
+      migrate: (persisted, version) => {
+        const p = persisted as { shot?: { rigStyle?: string } } | undefined;
+        if (version < 2 && p?.shot?.rigStyle === "subject") p.shot.rigStyle = "set3d";
+        return p as Studio;
+      },
       merge: (persisted, current) => {
         const p = persisted as (Partial<Studio> & { sequence?: string[] }) | undefined;
         // Before projects there was one sequence; it becomes the "all projects" one.

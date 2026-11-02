@@ -10,6 +10,7 @@ const DATA_FILES = [
   "src/lib/cinema/moves.ts",
   "src/lib/cinema/looks.ts",
   "src/lib/cinema/custom.ts",
+  "src/lib/cinema/setPieces.ts",
   "src/lib/assets.ts",
   "src/lib/engines/specs.ts",
   "src/lib/engines/sizing.ts",
@@ -81,7 +82,7 @@ for (const file of UI_DIRS.flatMap((d) => walk(path.join(ROOT, d)))) {
   for (const m of src.matchAll(/<(?:IconButton|Slider)\b[^>]*?\blabel="((?:[^"\\]|\\.)*)"/g)) add(m[1]);
   // Data lists shown through tr() at render time.
   for (const m of src.matchAll(/\b(label|title|hint|plural|verb|blurb|message)\s*:\s*"((?:[^"\\]|\\.)*)"/g)) add(m[2]);
-  for (const m of src.matchAll(/const (STEPS|SIZE_SHORT|OUTPUT_LABEL|PROBLEMS)[^=]*=\s*([\s\S]*?);\n/g)) for (const l of m[2].matchAll(LIT)) add(l[1]);
+  for (const m of src.matchAll(/const (STEPS|SIZE_SHORT|OUTPUT_LABEL|MOTION_LABEL|PROBLEMS)[^=]*=\s*([\s\S]*?);\n/g)) for (const l of m[2].matchAll(LIT)) add(l[1]);
   // Henshin's "what's missing" lines.
   for (const m of src.matchAll(/return [^;]*\?[^;]*;/g)) if (/missingText|g\.\w+Source|g\.still/.test(m[0])) for (const l of m[0].matchAll(LIT)) add(l[1]);
 }

@@ -141,6 +141,56 @@ describe("compiled graphs validate against the home server's node list", () => {
     expect(meta.prompt).toMatch(/stand-in figures/);
   });
 
+  it("the 3D set's guide drives H3 in place of the ghost rig, with or without the nodes", () => {
+    const guide = { name: "nf_guide.mp4", kind: "video" as const, url: "/api/files/uploads/g.mp4", duration: 5 };
+    for (const info of [withPack, withoutPack]) {
+      const { graph, meta } = compile(shot({ cameraMode: "rig", rigStyle: "set3d", guide }), detectCapabilities(info));
+      expect(validateGraph(graph, info)).toEqual([]);
+      const nodes = Object.values(graph);
+      expect(nodes.some((n) => n.class_type === "NovaGhostRig")).toBe(false);
+      expect(nodes.find((n) => n.class_type === "LoadVideo")?.inputs.file).toBe("nf_guide.mp4");
+      expect(meta.engine).toContain("+ 3D previs");
+      expect(meta.prompt).toMatch(/Match the camera path of <Video 1> exactly/);
+      expect(meta.prompt).toMatch(/rough 3D blockout; never show its grid, block figures/);
+      expect(meta.notes.join(" ")).not.toMatch(/needs the NovaField nodes/);
+      // A preset move has no stand-ins of its own: the guide's one figure only marks the subject.
+      expect(meta.prompt).toMatch(/Its block figure only marks where the subject is/);
+    }
+  });
+
+  it("doesn't ask for the nodes when a still shot on the 3D set has no guide", () => {
+    const { meta } = compile(shot({ cameraMode: "rig", rigStyle: "set3d", move: "locked" }), detectCapabilities(withoutPack));
+    expect(meta.notes.join(" ")).not.toMatch(/needs the NovaField nodes/);
+  });
+
+  it("the 3D set without a drawn guide (an agent's shot) falls back to the ghost rig's figure scene", () => {
+    const { graph } = compile(shot({ cameraMode: "rig", rigStyle: "set3d" }), detectCapabilities(withPack));
+    expect(Object.values(graph).find((n) => n.class_type === "NovaGhostRig")?.inputs.style).toBe("subject");
+  });
+
+  it("stand-ins' motions and facing reach the prompt, but not the ghost rig node", () => {
+    const rig = {
+      keys: [
+        { t: 0, pos: [0, 1.5, 5] as [number, number, number], target: [0, 1.3, 0] as [number, number, number], fov: 40, roll: 0 },
+        { t: 1, pos: [0, 1.5, 3] as [number, number, number], target: [0, 1.3, 0] as [number, number, number], fov: 40, roll: 0 },
+      ],
+      ease: "linear" as const,
+      actors: [
+        { from: [-2, 0] as [number, number], to: [2, 0] as [number, number], height: 1.75, action: "run" as const },
+        { from: [1, -1] as [number, number], to: [1, -1] as [number, number], height: 1.75, action: "wave" as const, turn: 180 },
+        { from: [-1, -1] as [number, number], to: [-1, -1] as [number, number], height: 1.75, turn: 90 },
+      ],
+      follow: null,
+    };
+    const { graph, meta } = compile(shot({ cameraMode: "rig", rig }), detectCapabilities(withPack));
+    const node = Object.values(graph).find((n) => n.class_type === "NovaGhostRig")!;
+    expect(String(node.inputs.camera_path)).not.toMatch(/turn|action/);
+    expect(meta.prompt).toMatch(/The main subject runs across the frame from left to right/);
+    expect(meta.prompt).toMatch(/The second person waves, with their back to the camera/);
+    // Turned toward the second person, so it says so rather than "facing frame right".
+    expect(meta.prompt).toMatch(/The third person stands facing the second person/);
+  });
+
   it("stacked moves reach the ghost rig as one path and read as a sequence", () => {
     const combo = [
       { id: "push_in", intensity: 1, when: "whole" as const },

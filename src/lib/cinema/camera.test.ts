@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import fixtures from "../../../comfyui-novafield/tests/fixtures/camera_cases.json";
-import { actorPositions, basis, poseAt, project, propCorners, type CameraPath, type Vec3 } from "./camera";
+import { actorPositions, basis, forNode, poseAt, project, propCorners, type CameraPath, type Vec3 } from "./camera";
 import { buildPath, composePath, describeLayers, MOVES } from "./moves";
 
 // The Python node pack writes these fixtures; the app's previs must land on the same pixels.
@@ -111,5 +111,25 @@ describe("composable moves", () => {
       { id: "crane_up", intensity: 1, when: "end" },
     ]);
     expect(text).toBe("slow dolly push-in toward the subject; then crane shot rising up and over the subject");
+  });
+});
+
+describe("the path the node gets", () => {
+  it("leaves out the app's 3D takes and keeps everything else", () => {
+    const path: CameraPath = {
+      version: 1,
+      frames: 24,
+      fps: 24,
+      ease: "linear",
+      keys: [{ t: 0, pos: [0, 1.5, 4], target: [0, 1.4, 0], fov: 40, roll: 0 }],
+      actors: [{ from: [0, 0], to: [1, 0], height: 1.7, model: "/api/files/media/a.glb", turn: 90, action: "run" }],
+      props: [{ at: [0, -2], size: [1, 1, 1], label: "Car", model: "/api/files/media/car.glb" }],
+    };
+    const sent = forNode(path);
+    expect(JSON.stringify(sent)).not.toContain("/api/files");
+    expect(sent.actors).toEqual([{ from: [0, 0], to: [1, 0], height: 1.7 }]);
+    expect(sent.props).toEqual([{ at: [0, -2], size: [1, 1, 1], label: "Car" }]);
+    expect(path.props![0].model).toBe("/api/files/media/car.glb"); // the app's own copy is untouched
+    expect(forNode({ ...path, actors: undefined, props: undefined }).props).toBeUndefined();
   });
 });

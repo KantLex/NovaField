@@ -1,23 +1,14 @@
 // The floor plan's geometry: the handles you drag, the view between metres and pixels, where set
 // pieces go, and editing the rig's camera points and stand-ins. Pure functions, no drawing.
 
-import { linearTimeFor, poseAt, type CameraKey, type CameraPath, type Prop, type Vec3 } from "@/lib/cinema/camera";
-import { DEFAULT_ACTOR, type CustomRig } from "@/lib/cinema/custom";
+import { linearTimeFor, poseAt, type Actor, type CameraKey, type CameraPath, type Prop, type Vec3 } from "@/lib/cinema/camera";
+import { DEFAULT_ACTOR, facingOf, walks, type CustomRig } from "@/lib/cinema/custom";
 import { fovFor, LENSES } from "@/lib/cinema/moves";
 
-export type Handle = { kind: "cam" | "aim" | "from" | "to" | "prop"; i: number };
+/** What can be dragged: a camera mark or its aim, a stand-in's marks or the arrow it faces along, a set piece. */
+export type Handle = { kind: "cam" | "aim" | "from" | "to" | "face" | "prop"; i: number };
 
-/** Set pieces to block a scene with: real-world sizes, [width, height, depth] in metres. */
-export const SET_PIECES: { label: string; size: Vec3 }[] = [
-  { label: "Table", size: [1.6, 0.75, 0.9] },
-  { label: "Counter", size: [2.4, 1.05, 0.6] },
-  { label: "Sofa", size: [2.1, 0.85, 0.9] },
-  { label: "Bed", size: [1.6, 0.6, 2.1] },
-  { label: "Car", size: [4.5, 1.45, 1.8] },
-  { label: "Wall", size: [4, 2.6, 0.15] },
-  { label: "Door frame", size: [1, 2.1, 0.15] },
-  { label: "Crate", size: [0.8, 0.8, 0.8] },
-];
+export { SET_PIECES } from "@/lib/cinema/setPieces";
 export const MAX_PROPS = 8;
 export const PROP_RGB = "214,206,184";
 
@@ -92,17 +83,70 @@ export const lensOf = (fov: number) => LENSES.reduce((best, l) => (Math.abs(fovF
 /** Presets have one figure at the origin; show it as stand-in 1 so it can be dragged. */
 export const withCast = (p: CameraPath): CameraPath => (p.actors ? p : { ...p, actors: [{ ...DEFAULT_ACTOR }] });
 
-/** Every draggable point, in draw and hit-test order: set pieces, aims, cameras, then people on top. */
-export function handles(p: CameraPath): { h: Handle; x: number; z: number }[] {
-  const out: { h: Handle; x: number; z: number }[] = [];
-  (p.props ?? []).forEach((pr, i) => out.push({ h: { kind: "prop", i }, x: pr.at[0], z: pr.at[1] }));
-  p.keys.forEach((k, i) => out.push({ h: { kind: "aim", i }, x: k.target[0], z: k.target[2] }));
-  p.keys.forEach((k, i) => out.push({ h: { kind: "cam", i }, x: k.pos[0], z: k.pos[2] }));
+/** Every draggable point, in draw and hit-test order: set pieces, aims, cameras, then people on top. `y` is its height (the 3D plan). */
+export function handles(p: CameraPath): { h: Handle; x: number; y: number; z: number }[] {
+  const out: { h: Handle; x: number; y: number; z: number }[] = [];
+  (p.props ?? []).forEach((pr, i) => out.push({ h: { kind: "prop", i }, x: pr.at[0], y: pr.size[1] / 2, z: pr.at[1] }));
+  p.keys.forEach((k, i) => out.push({ h: { kind: "aim", i }, x: k.target[0], y: k.target[1], z: k.target[2] }));
+  p.keys.forEach((k, i) => out.push({ h: { kind: "cam", i }, x: k.pos[0], y: k.pos[1], z: k.pos[2] }));
   (p.actors ?? []).forEach((a, i) => {
-    if (a.to[0] !== a.from[0] || a.to[1] !== a.from[1]) out.push({ h: { kind: "to", i }, x: a.to[0], z: a.to[1] });
-    out.push({ h: { kind: "from", i }, x: a.from[0], z: a.from[1] });
+    if (walks(a)) out.push({ h: { kind: "to", i }, x: a.to[0], y: 0, z: a.to[1] });
+    else {
+      const [x, z] = facePoint(a, p.keys[0].pos);
+      out.push({ h: { kind: "face", i }, x, y: 0, z });
+    }
+    out.push({ h: { kind: "from", i }, x: a.from[0], y: 0, z: a.from[1] });
   });
   return out;
+}
+
+/** How far in front of a standing stand-in its facing arrow sits, in metres. */
+export const FACE_REACH = 0.75;
+
+/** The tip of a standing stand-in's facing arrow on the floor. */
+export function facePoint(a: Actor, cam: Vec3): [number, number] {
+  const th = (facingOf(a, cam) * Math.PI) / 180;
+  return [a.from[0] + Math.sin(th) * FACE_REACH, a.from[1] + Math.cos(th) * FACE_REACH];
+}
+
+/** The turn that faces a stand-in toward floor point (x, z), to the nearest 5°. */
+export function turnToward(a: Actor, x: number, z: number): number {
+  const deg = (Math.atan2(x - a.from[0], z - a.from[1]) * 180) / Math.PI;
+  const r = Math.round(deg / 5) * 5;
+  return r === -180 ? 180 : r;
+}
+
+/** True when two turns (degrees) point the same way: 180 and -180 alike. */
+export const sameTurn = (a: number, b: number) => Math.abs(((((a - b) % 360) + 540) % 360) - 180) < 0.5;
+
+/** How high a camera mark or its aim can go, as on the inspector's sliders. */
+export const HEIGHTS = { cam: [0.1, 9], aim: [0, 4] } as const;
+
+/** Where a view ray (origin, direction) meets the level plane at height `y`, as floor [x, z]. Null when it never does, or far off the set. */
+export function rayToLevel(o: Vec3, d: Vec3, y: number): [number, number] | null {
+  if (Math.abs(d[1]) < 1e-6) return null;
+  const t = (y - o[1]) / d[1];
+  if (t <= 0) return null;
+  const x = o[0] + d[0] * t;
+  const z = o[2] + d[2] * t;
+  return Math.abs(x) > 40 || Math.abs(z) > 40 ? null : [x, z];
+}
+
+/** The height a view ray points at on the upright plane through `p` that faces the viewer: dragging a mark up and down. */
+export function rayToHeight(o: Vec3, d: Vec3, p: Vec3): number | null {
+  // The plane's normal is the view direction laid flat, so the mark keeps its place on the floor.
+  const nx = d[0];
+  const nz = d[2];
+  const denom = d[0] * nx + d[2] * nz;
+  if (denom < 1e-6) return null;
+  const t = ((p[0] - o[0]) * nx + (p[2] - o[2]) * nz) / denom;
+  return t <= 0 ? null : o[1] + d[1] * t;
+}
+
+/** A box scaled as one, so its longest side is `longest` metres: a 3D take's set piece keeps the model's proportions. */
+export function scaleBox(size: Vec3, longest: number): Vec3 {
+  const big = Math.max(size[0], size[1], size[2], 1e-6);
+  return size.map((v) => Math.max(0.05, Math.round(((v / big) * longest) * 100) / 100)) as Vec3;
 }
 
 /** Metres on the floor (x, z) → pixels on a w×h plan. */

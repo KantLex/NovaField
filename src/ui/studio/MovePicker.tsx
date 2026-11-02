@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { shotPath, type CustomRig } from "@/lib/cinema/custom";
 import { buildPath, CATEGORIES, MOVES, type Framing, type MoveCategory, type MoveLayer } from "@/lib/cinema/moves";
-import { RigView } from "../RigView";
+import { MoveThumb } from "../MoveThumb";
 import { useStudio, type SavedMove } from "../state";
 import { tr } from "@/i18n";
 import { useReveal } from "../reveal";
@@ -203,7 +203,7 @@ function MoveTile({
         active ? "shadow-[0_0_0_2px_var(--color-tungsten)]" : "shadow-[0_0_0_1px_var(--color-line)] hover:shadow-[0_0_0_1px_var(--color-dim)]",
       )}
     >
-      <RigView path={path} style="subject" playing={hover || active} className="aspect-video w-full" />
+      <MoveThumb path={path} playing={hover || active} className="aspect-video w-full" />
       {badge !== null && <span className="readout absolute top-1 right-1 flex size-4 items-center justify-center rounded-full bg-tungsten text-[11px] text-black">{badge}</span>}
       <span className={clsx("px-1.5 py-1 text-[12px] leading-tight", active ? "text-ink" : "text-dim group-hover:text-ink")}>{label}</span>
     </button>
@@ -227,7 +227,7 @@ function SavedTile({ move, active, framing, onPick, onRemove }: { move: SavedMov
           active ? "shadow-[0_0_0_2px_var(--color-tungsten)]" : "shadow-[0_0_0_1px_var(--color-line)] hover:shadow-[0_0_0_1px_var(--color-dim)]",
         )}
       >
-        <RigView path={path} style="subject" playing={hover || active} className="aspect-video w-full" />
+        <MoveThumb path={path} playing={hover || active} className="aspect-video w-full" />
         <span className={clsx("truncate px-1.5 py-1 text-[12px] leading-tight", active ? "text-ink" : "text-dim group-hover:text-ink")}>{move.name}</span>
       </button>
       <button

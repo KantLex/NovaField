@@ -62,8 +62,14 @@ class Hub {
       setTimeout(() => this.ensure(), this.retry);
       this.retry = Math.min(this.retry * 2, 30_000);
     };
+    // A connection that fails (ComfyUI off or unreachable) fires only "error", never "close", and
+    // closing a socket that never opened fires "error" again, over and over. So retry from either
+    // event (reconnect runs once per socket) and only close a socket that did open.
     ws.onclose = reconnect;
-    ws.onerror = () => ws.close();
+    ws.onerror = () => {
+      reconnect();
+      if (ws.readyState === WebSocket.OPEN) ws.close();
+    };
   }
 
   /** Drop the socket and dial the server the connection now points at. */

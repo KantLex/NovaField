@@ -193,6 +193,23 @@ export function drawPlan(ctx: CanvasRenderingContext2D, w: number, h: number, st
       ctx.moveTo(P[0], P[1] - 14);
       ctx.lineTo(P[0], P[1] + 14);
       ctx.stroke();
+    } else if (hd.kind === "face") {
+      // An arrow from the stand-in's mark, the way it faces.
+      const a = e.actors![hd.i];
+      const F = S(a.from[0], a.from[1]);
+      const ang = Math.atan2(P[1] - F[1], P[0] - F[0]);
+      ctx.strokeStyle = ctx.fillStyle = active ? "#fff" : ACTOR_COLORS[hd.i % ACTOR_COLORS.length];
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(F[0] + Math.cos(ang) * 10, F[1] + Math.sin(ang) * 10);
+      ctx.lineTo(P[0], P[1]);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(P[0] + Math.cos(ang) * 7, P[1] + Math.sin(ang) * 7);
+      ctx.lineTo(P[0] + Math.cos(ang + 2.4) * 7, P[1] + Math.sin(ang + 2.4) * 7);
+      ctx.lineTo(P[0] + Math.cos(ang - 2.4) * 7, P[1] + Math.sin(ang - 2.4) * 7);
+      ctx.closePath();
+      ctx.fill();
     } else {
       const col = ACTOR_COLORS[hd.i % ACTOR_COLORS.length];
       ctx.lineWidth = 2;
