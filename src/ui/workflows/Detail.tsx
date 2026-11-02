@@ -28,6 +28,7 @@ export const OUTPUT_LABEL = {
   video: "Makes video",
   image: "Makes images",
   audio: "Makes audio",
+  model: "Makes 3D models",
   unknown: "Output unknown",
 };
 

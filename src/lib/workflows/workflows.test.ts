@@ -216,6 +216,13 @@ describe("reading a workflow like a person", () => {
     expect(detectOutput(graph, info)).toBe("image");
   });
 
+  it("reads a workflow that saves a mesh as a 3D one, even with a preview picture", () => {
+    const out = { input: { required: {} }, output: [], output_node: true, category: "3d" } as unknown as ObjectInfo[string];
+    const withMesh = { ...graph, "90": { class_type: "SaveGLB", inputs: {} } };
+    expect(detectOutput(withMesh, { ...info, SaveGLB: out })).toBe("model");
+    expect(detectOutput({ ...graph, "91": { class_type: "Preview3D", inputs: {} } }, { ...info, Preview3D: out })).toBe("model");
+  });
+
   it("drives the workflow from a Studio shot", () => {
     const recipe: Recipe = { id: "r1", name: "Fox", source: "fox.json", createdAt: 0, updatedAt: 0, graph, fields, output: "image", fps: null, missing: [], warnings: [] };
     expect(isEngine(recipe)).toBe(true);

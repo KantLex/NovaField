@@ -26,6 +26,8 @@ export interface Job {
   video?: string;
   image?: string;
   audio?: string;
+  /** A 3D model (.glb, .gltf, .obj, .ply, .stl or .fbx) from a workflow. */
+  model?: string;
   poster?: string;
   strip?: string;
   error?: string;
@@ -38,7 +40,8 @@ export interface Job {
 }
 
 /** What a take is: from its file once it has one, else from what its engine makes. */
-export function outputOf(j: Job): "video" | "image" | "audio" | null {
+export function outputOf(j: Job): "video" | "image" | "audio" | "model" | null {
+  if (j.model) return "model";
   if (j.video) return "video";
   if (j.image) return "image";
   if (j.audio) return "audio";

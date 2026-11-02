@@ -68,6 +68,7 @@ function takeView(j: Job) {
     ...(j.video ? { video: nova.absolute(j.video) } : {}),
     ...(j.image ? { image: nova.absolute(j.image) } : {}),
     ...(j.audio ? { audio: nova.absolute(j.audio) } : {}),
+    ...(j.model ? { model: nova.absolute(j.model) } : {}),
     ...(j.poster ? { poster: nova.absolute(j.poster) } : {}),
     ...(j.error ? { error: j.error } : {}),
     ...(j.dryRun ? { dryRun: true } : {}),
@@ -495,28 +496,37 @@ server.registerTool(
   "assemble_film",
   {
     title: "Assemble the film",
-    description: "Cut a project's edit (or the clips given) into one MP4 with ffmpeg on this machine: trims, cuts and dissolves. No GPU and no credits. Returns the film's URL.",
+    description:
+      "Cut a project's edit (or the clips given) into one MP4 with ffmpeg on this machine: trims, cuts and dissolves, under the edit's saved soundtrack unless another is given. No GPU and no credits. Returns the film's URL.",
     inputSchema: {
       project: z.string().optional().describe("Use this project's saved edit."),
       clips: z.array(z.union([z.string(), clipInput])).optional().describe("Or these clips instead of the saved edit."),
       title: z.string().optional(),
       soundtrack: z
         .object({
-          file: z.string().describe("Absolute path to a local audio file (or a video with sound): the song or score."),
+          file: z.string().optional().describe("Absolute path to a local audio file (or a video with sound): the song or score."),
+          take: z.string().optional().describe("Or an audio take's id (a music or voice workflow's result) instead of a file."),
           start: z.number().min(0).default(0).describe("Seconds into the file where the film's first frame lands."),
           mix: z.enum(["replace", "under"]).default("replace").describe("replace: the music is the only sound (music videos); under: the takes' own sound stays, lowered, beneath it."),
           volume: z.number().min(0).max(1).default(1),
         })
+        .refine((t) => !!t.file !== !!t.take, "Give a file or a take, not both.")
         .optional()
-        .describe("Music over the whole film, cut to its length with a one-second fade at the end."),
+        .describe("Music over the whole film, cut to its length with a one-second fade at the end. Without it, a saved edit plays under its saved soundtrack (if any); no_soundtrack leaves that out."),
+      no_soundtrack: z.boolean().optional().describe("Assemble without the edit's saved soundtrack."),
     },
   },
-  tool(async (a: { project?: string; clips?: (string | z.infer<typeof clipInput>)[]; title?: string; soundtrack?: { file: string; start: number; mix: "replace" | "under"; volume: number } }) => {
+  tool(async (a: { project?: string; clips?: (string | z.infer<typeof clipInput>)[]; title?: string; soundtrack?: { file?: string; take?: string; start: number; mix: "replace" | "under"; volume: number }; no_soundtrack?: boolean }) => {
     const clips = a.clips?.length
       ? a.clips.map((c, i) => (typeof c === "string" ? { id: `c${i}`, take: c, in: 0, out: 0 } : { id: `c${i}`, in: 0, out: 0, ...c }))
       : (await nova.sequence(await editKey(a.project))).clips;
     if (!clips.length) throw new Error("That edit is empty. Add clips with set_edit first.");
-    const track = a.soundtrack ? { url: (await nova.upload(a.soundtrack.file, "track")).url, start: a.soundtrack.start, mix: a.soundtrack.mix, volume: a.soundtrack.volume } : undefined;
+    const s = a.soundtrack;
+    const track = s
+      ? { ...(s.take ? { take: s.take } : { url: (await nova.upload(s.file!, "track")).url }), start: s.start, mix: s.mix, volume: s.volume }
+      : a.no_soundtrack || a.clips?.length
+        ? undefined
+        : ((await nova.soundtrack(await editKey(a.project))).track ?? undefined);
     const film = await nova.assemble(clips, a.title, track);
     return { ...film, url: nova.absolute(film.url) };
   }),

@@ -15,14 +15,14 @@ import { useEffect } from "react";
 import type { AssetEntry } from "@/lib/assets";
 import type { Job } from "@/lib/jobs";
 import type { Project } from "@/lib/projects";
-import type { Clip } from "@/lib/sequence";
+import type { Clip, Soundtrack } from "@/lib/sequence";
 import { request } from "./api";
 import { useAssets } from "./assets/store";
 import { useProjects } from "./projects";
-import { receiveEdit, receiveEdits } from "./sequence";
+import { receiveEdit, receiveEdits, receiveSoundtrack, receiveSoundtracks } from "./sequence";
 import { useLive, type ServerStatus } from "./state";
 
-const EVENTS = ["snapshot", "job", "removed", "projects", "assets", "sequences", "sequence", "status"] as const;
+const EVENTS = ["snapshot", "job", "removed", "projects", "assets", "sequences", "sequence", "soundtracks", "soundtrack", "status"] as const;
 type FeedEvent = (typeof EVENTS)[number];
 type Message = { event: FeedEvent; data: unknown } | { state: "open" | "down" };
 
@@ -47,6 +47,10 @@ function apply(event: FeedEvent, data: unknown) {
       return receiveEdits(data as Record<string, Clip[]>);
     case "sequence":
       return receiveEdit(data as Parameters<typeof receiveEdit>[0]);
+    case "soundtracks":
+      return receiveSoundtracks(data as Record<string, Soundtrack>);
+    case "soundtrack":
+      return receiveSoundtrack(data as Parameters<typeof receiveSoundtrack>[0]);
     case "status":
       return live.setStatus(data as ServerStatus);
   }
@@ -103,9 +107,15 @@ function holdFeed(relay: ((m: Message) => void) | null): () => void {
 
 /** What a tab that follows the relay loads for itself first. */
 async function catchUp() {
-  const [jobs, edits, status] = await Promise.all([request<Job[]>("/api/jobs"), request<Record<string, Clip[]>>("/api/sequences"), request<ServerStatus>("/api/status")]);
+  const [jobs, edits, tracks, status] = await Promise.all([
+    request<Job[]>("/api/jobs"),
+    request<Record<string, Clip[]>>("/api/sequences"),
+    request<Record<string, Soundtrack>>("/api/soundtracks"),
+    request<ServerStatus>("/api/status"),
+  ]);
   apply("snapshot", jobs);
   apply("sequences", edits);
+  apply("soundtracks", tracks);
   apply("status", status);
   useLive.getState().setConnected(true);
 }

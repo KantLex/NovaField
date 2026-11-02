@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { create } from "zustand";
 import type { Job } from "@/lib/jobs";
-import { clipFor, normalize, type Clip, type Source } from "@/lib/sequence";
-import { fail, request } from "./api";
+import { clipFor, normalize, type Clip, type Soundtrack, type Source } from "@/lib/sequence";
+import { fail, request, toast } from "./api";
 import { useProjects } from "./projects";
 import { sequenceKey, useLive, useStudio } from "./state";
 
@@ -49,6 +49,48 @@ export function receiveEdits(all: Record<string, Clip[]>) {
 export function receiveEdit(change: { key: string; clips: Clip[]; origin: string | null }) {
   if (change.origin === ORIGIN) return;
   useEdits.setState((s) => ({ edits: { ...s.edits, [change.key]: change.clips } }));
+}
+
+// Each edit's soundtrack, kept the same way: saved on the server, changes from elsewhere from the feed.
+const useTracks = create<{ tracks: Record<string, Soundtrack> }>(() => ({ tracks: {} }));
+
+function saveTrack(key: string, track: Soundtrack | null) {
+  useTracks.setState((s) => ({ tracks: withTrack(s.tracks, key, track) }));
+  return request<{ track: Soundtrack | null }>(`/api/soundtracks/${encodeURIComponent(key)}`, { method: "PUT", json: { track, origin: ORIGIN } }).then((body) => {
+    // The server's version knows the file's length.
+    if (useTracks.getState().tracks[key] === (track ?? undefined)) useTracks.setState((s) => ({ tracks: withTrack(s.tracks, key, body.track) }));
+  });
+}
+
+const withTrack = (all: Record<string, Soundtrack>, key: string, track: Soundtrack | null) => {
+  const next = { ...all };
+  if (track) next[key] = track;
+  else delete next[key];
+  return next;
+};
+
+/** Every soundtrack, from the live feed when it (re)connects. */
+export const receiveSoundtracks = (all: Record<string, Soundtrack>) => useTracks.setState({ tracks: all });
+
+/** One soundtrack changed on the server; this tab's own saves come back too and are skipped. */
+export function receiveSoundtrack(change: { key: string; track: Soundtrack | null; origin: string | null }) {
+  if (change.origin === ORIGIN) return;
+  useTracks.setState((s) => ({ tracks: withTrack(s.tracks, change.key, change.track) }));
+}
+
+/** The soundtrack of the project being worked in, and a setter (null removes it). */
+export function useSoundtrack(): [Soundtrack | null, (next: Soundtrack | null) => void] {
+  const key = sequenceKey(useProjects((s) => s.current));
+  const track = useTracks((s) => s.tracks[key]) ?? null;
+  return [track, (next) => void saveTrack(key, next).catch(fail)];
+}
+
+/** An audio take becomes the soundtrack of the current project's edit. */
+export function soundtrackFrom(job: Job) {
+  const key = sequenceKey(useProjects.getState().current);
+  const was = useTracks.getState().tracks[key];
+  const track: Soundtrack = { take: job.id, label: job.title, start: 0, mix: was?.mix ?? "replace", volume: was?.volume ?? 1 };
+  return saveTrack(key, track).then(() => toast("Now the soundtrack of the edit. Open Sequence to set where it starts and how it mixes.", "done"));
 }
 
 // Lengths read from the files themselves, for takes whose metadata doesn't say (some workflows).

@@ -20,4 +20,25 @@ describe("a prompt's result", () => {
     expect(mainOutput({ outputs: { a: { gifs: [file("v.mp4", "temp")] } } })?.kind).toBe("video");
     expect(mainOutput({ outputs: { a: { images: [file("ref.png", "input")] } } })).toBeNull();
   });
+
+  it("takes a saved 3D model, with a picture the workflow saved as its poster", () => {
+    // SaveGLB lists its file under "3d"; a preview render sits beside it.
+    const entry: HistoryEntry = {
+      outputs: {
+        "9": { images: [file("front_00001_.png", "output")] },
+        "12": { "3d": [{ filename: "mesh_00001_.glb", subfolder: "3d", type: "output" }] },
+      },
+    };
+    expect(mainOutput(entry)).toEqual({ file: { filename: "mesh_00001_.glb", subfolder: "3d", type: "output" }, kind: "model", poster: file("front_00001_.png", "output") });
+  });
+
+  it("finds a model Preview3D only names by its path", () => {
+    const entry: HistoryEntry = { outputs: { "4": { result: ["mesh/ComfyUI_00003_.glb", { position: [0, 0, 1] }] } } };
+    expect(mainOutput(entry)).toEqual({ file: { filename: "ComfyUI_00003_.glb", subfolder: "mesh", type: "output" }, kind: "model" });
+  });
+
+  it("finds a model file under any key, and ignores files that aren't models", () => {
+    expect(mainOutput({ outputs: { a: { meshes: [file("thing.obj", "output")] } } as HistoryEntry["outputs"] })?.kind).toBe("model");
+    expect(mainOutput({ outputs: { a: { result: ["notes.txt"] } } })).toBeNull();
+  });
 });

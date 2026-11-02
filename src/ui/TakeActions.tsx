@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { BookmarkPlus, ChevronDown, ChevronLeft, ChevronRight, Clapperboard, Download, Ellipsis, FastForward, Film, FolderInput, ImageDown, ImageUpscale, ListPlus, Pencil, Play, Repeat, Replace, Sparkles, Star, Trash2, UserRound, Wand2, Workflow, X } from "lucide-react";
+import { BookmarkPlus, ChevronDown, ChevronLeft, ChevronRight, Clapperboard, Download, Ellipsis, FastForward, Film, FolderInput, ImageDown, ImageUpscale, ListPlus, Music, Pencil, Play, Repeat, Replace, Sparkles, Star, Trash2, UserRound, Wand2, Workflow, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { isLive, type Job } from "@/lib/jobs";
@@ -16,6 +16,7 @@ import { usePulse } from "./pulse";
 import { reuse, reuseTarget } from "./reuse";
 import { PICTURE_TARGETS, sendClip, sendTakePicture, sendToEdit } from "./sendTo";
 import { tr } from "@/i18n";
+import { soundtrackFrom } from "./sequence";
 import { useStudio } from "./state";
 
 /** The star, with a small pop when it changes (not when the card first appears). */
@@ -28,9 +29,9 @@ function StarIcon({ on }: { on: boolean }) {
   );
 }
 
-/** The take's file (clip, picture or sound) and a file name from its title, for the download button. */
+/** The take's file (clip, picture, sound or 3D model) and a file name from its title, for the download button. */
 export function takeFile(job: Job): { url: string; name: string } | null {
-  const url = job.video ?? job.image ?? job.audio;
+  const url = job.model ?? job.video ?? job.image ?? job.audio;
   if (job.status !== "done" || !url) return null;
   const ext = url.match(/\.\w+$/)?.[0] ?? "";
   const base = job.title.replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "").slice(0, 60).toLowerCase() || job.id;
@@ -60,7 +61,7 @@ type Action = { id: string; label: string; short?: string; icon: React.ReactNode
 
 /** Everything you can do with a take: as an overlay on cards, or inline in viewers. `without` leaves actions out by id. */
 /** On a thumbnail, the next steps that stay icons (the first two of these the take has); the rest go under More. */
-const CARD_NEXT = ["animate", "continue", "reuse", "restyle", "edit", "grade", "lab", "upscale"];
+const CARD_NEXT = ["animate", "continue", "reuse", "restyle", "edit", "soundtrack", "grade", "lab", "upscale"];
 
 export function TakeActions({ job, inline = false, without = [] }: { job: Job; inline?: boolean; without?: string[] }) {
   const live = isLive(job);
@@ -74,7 +75,7 @@ export function TakeActions({ job, inline = false, without = [] }: { job: Job; i
     ? [
         ...(job.video ? [{ url: job.video, label: tr("The clip") }] : []),
         ...(job.image ? [{ url: job.image, label: tr("The image") }] : []),
-        ...(job.video && job.poster ? [{ url: job.poster, label: tr("A still") }] : []),
+        ...((job.video || job.model) && job.poster ? [{ url: job.poster, label: tr("A still") }] : []),
         ...(job.audio && !job.video ? [{ url: job.audio, label: tr("The audio") }] : []),
       ]
     : [];
@@ -110,6 +111,15 @@ export function TakeActions({ job, inline = false, without = [] }: { job: Job; i
     { id: "restyle", label: "Restyle in Henshin", short: tr("Restyle"), icon: <Sparkles size={14} />, show: clip, group: "next", run: () => sendClip(job, "restyle", go) },
     { id: "grade", label: "Grade the film look", short: tr("Grade"), icon: <Film size={14} />, show: clip, group: "next", run: () => useGrade.getState().open(job.id) },
     { id: "edit", label: "Add to the edit", short: tr("Add to edit"), icon: <ListPlus size={14} />, show: clip, group: "next", run: () => sendToEdit(job) },
+    {
+      id: "soundtrack",
+      label: "Use as the edit's soundtrack",
+      short: tr("Soundtrack"),
+      icon: <Music size={14} />,
+      show: done && !!job.audio && !job.video,
+      group: "next",
+      run: () => soundtrackFrom(job).catch(fail),
+    },
     {
       id: "reuse",
       label: "Reuse prompt and references",

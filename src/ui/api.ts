@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import type { GraphPrice } from "@/lib/comfy/credits";
-import type { Clip } from "@/lib/sequence";
+import type { Clip, Soundtrack } from "@/lib/sequence";
 import type { Asset, FilmLab, JobSpec } from "@/lib/engines/specs";
 import type { Job } from "@/lib/jobs";
 import type { QcReport } from "@/lib/qc";
@@ -80,7 +80,8 @@ export const api = {
       price: GraphPrice | null;
       blocker: string | null;
     }>("/api/preflight", { json: { spec } }),
-  assemble: (clips: Clip[], title?: string) => request<{ id: string; url: string; title: string }>("/api/films", { json: { clips, title } }),
+  assemble: (clips: Clip[], title?: string, soundtrack?: Soundtrack | null) =>
+    request<{ id: string; url: string; title: string }>("/api/films", { json: { clips, title, ...(soundtrack ? { soundtrack } : {}) } }),
 };
 
 export interface Toast {

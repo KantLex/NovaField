@@ -56,6 +56,13 @@ degrees around the subject… The main subject walks across the frame from left 
 NovaField 從不清空佇列，也不會盲目中斷。它只取消自己的提示（等待中時用 `POST /queue {delete}`；
 執行中時用指定目標的 `/interrupt`）。當 GPU 正在處理別人的工作時，頂部會顯示出來。
 
+### 誰連得到它（`src/proxy.ts`）
+
+這個應用程式沒有帳號系統，所以只在這台電腦上運作。`pnpm dev` 和 `pnpm start` 只在 `127.0.0.1` 上監聽。
+每個 `/api` 請求都必須是發給 `localhost` 或回送 IP，因此把自己的網域指向這台電腦的網頁（DNS rebinding）會被拒絕。
+只有應用程式自己的頁面，或不送 `Origin` 的工具（CLI、代理）能做變更。
+`pnpm dev:lan`（`NOVAFIELD_LAN=1`，在所有網路介面上監聽）還會接受任何 IP 位址，以及 `NOVAFIELD_ALLOWED_HOSTS` 列出的名稱。
+
 ## 功能內部運作
 
 ### 圖片（`src/lib/engines/image.ts`、`src/ui/image`）
@@ -116,6 +123,22 @@ Python 的 `LOOK_PARAMS`，檢查兩邊是否一致。**精確檢查**會用真�
 
 `needsLook` 會標記分數低於 85 或含有高嚴重度問題的報告。報告格式請參閱
 [contract.md](contract.md#novashotqc-040)。
+
+### 工作流程的輸出：圖片、片段、聲音與 3D（`src/server/comfy.ts`、`src/ui/ModelTake.tsx`）
+
+`mainOutput` 會挑出完成的提示產生了什麼，順序是 3D 模型、影片、圖片、音訊。
+儲存節點會把模型列為 `"3d"`（或其他鍵）下的檔案，`Preview3D` 則只在 `"result"` 中寫出路徑；
+`modelOutput` 兩者都會讀，支援 `.glb`、`.gltf`、`.obj`、`.ply`、`.stl` 和 `.fbx`。工作流程若同時存了圖片，
+那張圖就是鏡次的海報；沒有的話，瀏覽器的 three.js 檢視器會算出第一個視角，送到
+`PUT /api/jobs/<id>/poster`（JPEG，只送一次）。會儲存網格的工作流程，`detectOutput` 會判定為 `"model"`，
+因此不會出現在攝影棚的模型中。
+
+### 配樂（`src/server/soundtracks.ts`、`src/ui/edit/SoundtrackPanel.tsx`）
+
+每份剪輯可以有一條配樂：一個音訊鏡次（`take`），或以 purpose `track` 上傳的檔案（`url`），加上
+`start`（影片第一格對應配樂的第幾秒）、`mix`（`replace` 或 `under`；`under` 時鏡次聲音為 `UNDER_LEVEL`）與 `volume`。
+從配樂找到磁碟上的檔案，唯一的途徑是 `soundtrackFile`。節目監看器會跟著播放頭播放配樂，並像匯出時一樣混合鏡次的聲音；
+`assemble` 會把它墊在剪輯下方，並在最後一秒淡出。
 
 ## ComfyUI-NovaField 節點包
 
@@ -244,7 +267,7 @@ pnpm novafield setup
 | `list_assets` / `register_asset` | 角色與素材庫；連同圖片新增一個角色 |
 | `list_projects` / `organise_takes` | 把鏡次移到某個專案（需要時建立專案），加上星號 |
 | `get_edit` / `set_edit` | 某個專案在序列剪輯器中的時間軸：含入點/出點以及剪接或溶接的片段 |
-| `assemble_film` | 在這台電腦上用 ffmpeg 把剪輯組成一個 MP4（不用 GPU、不花點數），可選擇墊上 `soundtrack` |
+| `assemble_film` | 在這台電腦上用 ffmpeg 把剪輯組成一個 MP4（不用 GPU、不花點數），墊上剪輯儲存的配樂，或 `soundtrack` 指定的檔案或音訊鏡次 |
 | `recast` | 變身：把片段中的人物換成某個角色，保留動作和運鏡 |
 | `restyle` | 變身：逐鏡頭以新的風格重新渲染片段 |
 | `replace_object` | 變身：用方框追蹤某個物件，並把它換成別的東西 |
@@ -276,7 +299,7 @@ CLI（`src/agent/cli.ts`）背後也是同一個用戶端。MCP 工具能做的�
 | 檢查 | `qc <take>`：分數，以及每個瑕疵和它的時間點 |
 | 媒體庫 | `takes`、`take`、`cancel`、`frame`、`move`、`star`、`projects`、`assets`、`asset` |
 | 工作流程 | `find-workflows`、`import <file \| template:<name> \| saved:<path>>` |
-| 剪輯 | `edit`、`edit set <clip>…`、`film [--soundtrack]`、`setup` |
+| 剪輯 | `edit`、`edit set <clip>…`、`film [--soundtrack \| --no-soundtrack]`、`setup` |
 
 圖片和片段在任何地方的寫法都相同：`asset:<id>`、`take:<id>`（加上 `@<seconds>` 表示其中一格）、
 檔案路徑，或單純的鏡次或素材 id。共用的渲染選項：`--project`、`--wait`（顯示即時進度）、
@@ -342,13 +365,14 @@ NovaField 保存的所有東西都在 `data/` 中（不納入 git），或在設
 |---|---|
 | `jobs.json` | 每個鏡次：它的規格、狀態、檔案、品檢報告 |
 | `projects.json`、`sequences.json` | 專案，以及每個專案的一份剪輯（`GET`/`PUT /api/sequences/<project id or "all">`） |
+| `soundtracks.json` | 每份剪輯的配樂（`GET`/`PUT /api/soundtracks/<project id or "all">`） |
 | `assets.json`、`assets/` | 素材庫及其檔案 |
 | `media/`、`films/`、`uploads/` | 渲染結果、組合好的影片、上傳檔案 |
 | `workflows/` | 匯入的工作流程及其表單 |
 | `connection.json` | 伺服器和 API 金鑰 |
 | `storage.json` | 媒體資料夾的位置 |
 
-剪輯器和代理共用 `sequences.json`，所以開啟中的剪輯器會即時更新。
+剪輯器和代理共用 `sequences.json` 和 `soundtracks.json`，所以開啟中的剪輯器會即時更新。
 
 ## 程式碼結構
 

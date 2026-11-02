@@ -30,7 +30,7 @@ export interface Field {
   randomize?: boolean;
 }
 
-export type OutputKind = "video" | "image" | "audio" | "unknown";
+export type OutputKind = "video" | "image" | "audio" | "model" | "unknown";
 
 /** A ComfyUI workflow turned into a NovaField app. */
 export interface Recipe {

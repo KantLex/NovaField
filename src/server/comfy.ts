@@ -118,7 +118,7 @@ export async function upload(data: Blob, filename: string): Promise<string> {
 
 export interface HistoryEntry {
   status?: { status_str: string; completed: boolean; messages?: [string, Record<string, unknown>][] };
-  outputs: Record<string, { images?: FileRef[]; gifs?: FileRef[]; video?: FileRef[]; audio?: FileRef[]; animated?: boolean[]; text?: string[] }>;
+  outputs: Record<string, { images?: FileRef[]; gifs?: FileRef[]; video?: FileRef[]; audio?: FileRef[]; animated?: boolean[]; text?: string[]; "3d"?: FileRef[]; result?: unknown[] }>;
 }
 
 /**
@@ -187,8 +187,37 @@ export function videoOutput(entry: HistoryEntry): FileRef | null {
   return findOutput(entry, (out) => [...(out.video ?? []), ...(out.images ?? []), ...(out.gifs ?? [])], /\.(mp4|webm|mkv|mov)$/i);
 }
 
-/** The main result of a finished prompt: a video if there is one, else an image, else audio. */
-export function mainOutput(entry: HistoryEntry): { file: FileRef; kind: "video" | "image" | "audio" } | null {
+/** 3D model files a browser can show. */
+export const MODEL_EXT = /\.(glb|gltf|obj|ply|stl|fbx)$/i;
+
+/**
+ * The 3D model a finished prompt saved. Save nodes list it as a file ("3d", or any other key);
+ * Preview3D only names its path, relative to the output folder, in "result".
+ */
+export function modelOutput(entry: HistoryEntry): FileRef | null {
+  const isRef = (x: unknown): x is FileRef => !!x && typeof x === "object" && typeof (x as FileRef).filename === "string";
+  const saved = findOutput(entry, (out) => Object.values(out).flatMap((v) => (Array.isArray(v) ? (v as unknown[]).filter(isRef) : [])), MODEL_EXT);
+  if (saved) return saved;
+  for (const out of Object.values(entry.outputs)) {
+    const named = (out.result ?? []).find((x): x is string => typeof x === "string" && MODEL_EXT.test(x));
+    if (named) {
+      const parts = named.replace(/\\/g, "/").split("/").filter(Boolean);
+      return { filename: parts.pop()!, subfolder: parts.join("/"), type: "output" };
+    }
+  }
+  return null;
+}
+
+/**
+ * The main result of a finished prompt: a 3D model if there is one (with a picture it saved as its
+ * poster), else a video, else an image, else audio.
+ */
+export function mainOutput(entry: HistoryEntry): { file: FileRef; kind: "video" | "image" | "audio" | "model"; poster?: FileRef } | null {
+  const m = modelOutput(entry);
+  if (m) {
+    const still = findOutput(entry, (out) => out.images, /\.(png|jpe?g|webp)$/i);
+    return { file: m, kind: "model", ...(still ? { poster: still } : {}) };
+  }
   const v = videoOutput(entry);
   if (v) return { file: v, kind: "video" };
   const img = findOutput(entry, (out) => out.images, /\.(png|jpe?g|webp|gif)$/i);

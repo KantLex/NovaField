@@ -17,7 +17,7 @@ import { blocker, compile, recipeIdOf, type CompileContext } from "@/lib/engines
 import { detectCapabilities, type Capabilities } from "@/lib/engines/capabilities";
 import type { JobSpec } from "@/lib/engines/specs";
 import { isLive, titleFor, type Job } from "@/lib/jobs";
-import { cancelPrompt, history, mainOutput, objectInfo, queuePrompt, queueState, upload, viewPath } from "./comfy";
+import { cancelPrompt, history, mainOutput, objectInfo, queuePrompt, queueState, upload, viewPath, type FileRef } from "./comfy";
 import { DRY_RUN } from "./config";
 import { comfyFile, partnerKey } from "./connection";
 import { HUB, type ComfyEvent } from "./hub";
@@ -326,21 +326,35 @@ async function finalize(id: string, promptId: string) {
   const h = await history(promptId);
   const out = h && mainOutput(h);
   if (!out) {
-    await STORE.patch(id, { status: "failed", error: say("The render finished but saved no video, image or audio."), finishedAt: Date.now() });
+    await STORE.patch(id, { status: "failed", error: say("The render finished but saved no video, image, audio or 3D model."), finishedAt: Date.now() });
     return;
   }
-  const res = await comfyFile(viewPath(out.file));
-  if (!res.ok || !res.body) throw new Error(say("Could not download {file} ({status}).", { file: out.file.filename, status: res.status }));
   const ext = path.extname(out.file.filename).toLowerCase() || (out.kind === "video" ? ".mp4" : out.kind === "image" ? ".png" : ".flac");
   const file = path.join(dirs.media, out.kind === "video" ? `${id}.mp4` : `${id}${ext}`);
-  await pipeline(Readable.fromWeb(res.body as WebReadableStream), createWriteStream(file));
+  await download(out.file, file);
   if (out.kind === "video") return publish(id, file);
+  const url = `/api/files/media/${path.basename(file)}`;
+  if (out.kind === "model") {
+    // The picture a 3D workflow saved (a front view, a turntable frame) is its poster; without one the
+    // viewer makes one the first time the model is opened.
+    const still = out.poster && path.join(dirs.media, `${id}${path.extname(out.poster.filename).toLowerCase()}`);
+    const posterOk = !!(still && (await download(out.poster!, still).then(() => true, () => false)));
+    await STORE.patch(id, { status: "done", finishedAt: Date.now(), progress: { stage: "Wrapped", pct: 1 }, model: url, ...(posterOk ? { poster: `/api/files/media/${path.basename(still!)}` } : {}) });
+    return;
+  }
   await STORE.patch(id, {
     status: "done",
     finishedAt: Date.now(),
     progress: { stage: "Wrapped", pct: 1 },
-    ...(out.kind === "image" ? { image: `/api/files/media/${path.basename(file)}`, poster: `/api/files/media/${path.basename(file)}` } : { audio: `/api/files/media/${path.basename(file)}` }),
+    ...(out.kind === "image" ? { image: url, poster: url } : { audio: url }),
   });
+}
+
+/** Copy one of ComfyUI's output files here. */
+async function download(ref: FileRef, file: string) {
+  const res = await comfyFile(viewPath(ref));
+  if (!res.ok || !res.body) throw new Error(say("Could not download {file} ({status}).", { file: ref.filename, status: res.status }));
+  await pipeline(Readable.fromWeb(res.body as WebReadableStream), createWriteStream(file));
 }
 
 async function publish(id: string, file: string) {
@@ -388,6 +402,13 @@ async function simulate(id: string, graph: ApiGraph) {
   const output = rid ? (await getRecipe(rid))?.output : "video";
   const clip = path.join(dirs.media, `${id}.mp4`);
   await placeholder(clip, { width: w - (w % 2), height: h, seconds: Math.max(1, Math.min(m.seconds || 4, 8)), fps: 24, seed });
+  if (output === "model") {
+    const { rm, writeFile } = await import("node:fs/promises");
+    await rm(clip, { force: true });
+    await writeFile(path.join(dirs.media, `${id}.obj`), PLACEHOLDER_MODEL);
+    await STORE.patch(id, { status: "done", finishedAt: Date.now(), progress: { stage: "Wrapped", pct: 1 }, model: `/api/files/media/${id}.obj` });
+    return;
+  }
   if (output === "image") {
     const still = path.join(dirs.media, `${id}.jpg`);
     await poster(clip, still, 0.5);
@@ -400,6 +421,14 @@ async function simulate(id: string, graph: ApiGraph) {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Dry-run stand-in for a 3D render: a faceted gem, as a Wavefront OBJ. */
+const PLACEHOLDER_MODEL = (() => {
+  const ring = Array.from({ length: 8 }, (_, i) => [Math.cos((i * Math.PI) / 4), 0.25, Math.sin((i * Math.PI) / 4)]);
+  const v = [[0, 1.2, 0], ...ring, [0, -1, 0]];
+  const f = ring.flatMap((_, i) => [[1, 2 + i, 2 + ((i + 1) % 8)], [10, 2 + ((i + 1) % 8), 2 + i]]);
+  return [...v.map((p) => `v ${p.join(" ")}`), ...f.map((x) => `f ${x.join(" ")}`)].join("\n") + "\n";
+})();
 
 /** A cancel the server can't carry out without touching other work. */
 export class CancelRefused extends Error {}

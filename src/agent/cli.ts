@@ -81,7 +81,7 @@ Workflows
 Edit
   edit [--project]                    The project's edit
   edit set <clip>… [--append] [--project]      Clips: <take>[:in-out][:cut|dissolve][!] (! mutes)
-  film [--project] [--title] [--soundtrack <file> [--music-start <s>] [--mix replace|under] [--volume 0-1]]
+  film [--project] [--title] [--soundtrack <file> [--music-start <s>] [--mix replace|under] [--volume 0-1] | --no-soundtrack]
   setup                               How to connect an AI agent (any MCP client) to NovaField
 
 Pictures and clips: asset:<id>, take:<id>[@seconds], a file path, or a bare take or asset id.
@@ -169,6 +169,7 @@ const { values: o, positionals } = parseArgs({
     append: { type: "boolean" },
     title: { type: "string" },
     soundtrack: { type: "string" },
+    "no-soundtrack": { type: "boolean" },
     "music-start": { type: "string" },
     mix: { type: "string" },
     volume: { type: "string" },
@@ -197,7 +198,7 @@ const arg = (i: number, what: string) => {
 
 function line(j: Job) {
   const where = isLive(j) ? `${j.progress.stage} ${Math.round(j.progress.pct * 100)}%` : j.status;
-  const file = nova.absolute(j.video ?? j.image ?? j.audio);
+  const file = nova.absolute(j.model ?? j.video ?? j.image ?? j.audio);
   return `${j.id}  ${where.padEnd(14)} ${j.title}${file && j.status === "done" ? `\n          ${file}` : ""}${j.error ? `\n          ${j.error}` : ""}`;
 }
 
@@ -374,7 +375,7 @@ async function render(specs: JobSpec[], first: string[] = []) {
   if (o.save)
     for (const j of final)
       if (j.status === "done")
-        await save(j.video ?? j.image ?? j.audio, o.save, j.id, final.length > 1).then(
+        await save(j.model ?? j.video ?? j.image ?? j.audio, o.save, j.id, final.length > 1).then(
           (f) => note(`Saved ${f}`),
           (e: unknown) => {
             console.error(`Couldn't save ${j.id}: ${e instanceof Error ? e.message : String(e)}`);
@@ -595,9 +596,15 @@ async function edit() {
 }
 
 async function film() {
-  const { clips } = await nova.sequence((await project(o.project)) ?? "all");
+  const key = (await project(o.project)) ?? "all";
+  const { clips } = await nova.sequence(key);
   if (!clips.length) throw new NovaError("The edit is empty. novafield edit set <take>… fills it.");
-  const track = o.soundtrack ? { url: (await nova.upload(o.soundtrack, "track")).url, start: num(o["music-start"]) ?? 0, mix: (o.mix as "replace" | "under") ?? "replace", volume: num(o.volume) ?? 1 } : undefined;
+  // Without --soundtrack the edit's saved one plays under it, unless --no-soundtrack.
+  const track = o.soundtrack
+    ? { url: (await nova.upload(o.soundtrack, "track")).url, start: num(o["music-start"]) ?? 0, mix: (o.mix as "replace" | "under") ?? "replace", volume: num(o.volume) ?? 1 }
+    : o["no-soundtrack"]
+      ? undefined
+      : ((await nova.soundtrack(key)).track ?? undefined);
   note("Assembling with ffmpeg…");
   const made = await nova.assemble(clips, o.title, track);
   if (o.save) note(`Saved ${await save(made.url, o.save, o.title ?? "film")}`);
@@ -731,7 +738,7 @@ async function main() {
     case "take": {
       const id = arg(1, "Which take? novafield take <id>");
       const j = o.wait || o.save ? await follow(id) : await nova.take(id);
-      if (o.save && j.status === "done") note(`Saved ${await save(j.video ?? j.image ?? j.audio, o.save, j.id)}`);
+      if (o.save && j.status === "done") note(`Saved ${await save(j.model ?? j.video ?? j.image ?? j.audio, o.save, j.id)}`);
       if (o.wait || o.save) settle([j]);
       return out(line(j), j);
     }

@@ -36,13 +36,17 @@ const loudness = (file: string) => Number(/mean_volume: (-?[\d.]+) dB/.exec(spaw
 if (hasFfmpeg) {
   for (const id of ["a", "b"]) ff("-f", "lavfi", "-i", "color=c=gray:s=320x180:r=24:d=2", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-t", "2", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", path.join(data, "media", `${id}.mp4`));
   ff("-f", "lavfi", "-i", "sine=frequency=440:duration=10", "-c:a", "pcm_s16le", path.join(data, "uploads", "song.wav"));
+  // An audio take, as a music workflow leaves one.
+  ff("-f", "lavfi", "-i", "sine=frequency=330:duration=6", "-c:a", "flac", path.join(data, "media", "m.flac"));
   const job = (id: string) => ({ id, kind: "shot", title: id, spec: { kind: "shot" }, status: "done", createdAt: 1, updatedAt: 1, progress: { stage: "Wrapped", pct: 1 }, video: `/api/files/media/${id}.mp4`, meta: { seconds: 2, fps: 24, width: 320, height: 180, frames: 48 } });
-  await writeFile(path.join(data, "jobs.json"), JSON.stringify([job("a"), job("b")]));
+  const music = { id: "m", kind: "workflow", title: "Theme", spec: { kind: "workflow" }, status: "done", createdAt: 1, updatedAt: 1, progress: { stage: "Wrapped", pct: 1 }, audio: "/api/files/media/m.flac" };
+  await writeFile(path.join(data, "jobs.json"), JSON.stringify([job("a"), job("b"), music]));
 }
 
 // Frames are only placed in ComfyUI outside a dry run; there's no ComfyUI here.
 process.env.NOVAFIELD_DRY_RUN = "1";
 const films = await import("./films/route");
+const soundtracks = await import("./soundtracks/[key]/route");
 const frames = await import("./jobs/[id]/frame/route");
 const post = (body: unknown) => films.POST(new Request("http://x", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }));
 const clips = [
@@ -72,6 +76,27 @@ describe.skipIf(!hasFfmpeg)("a film with a soundtrack", () => {
     const full = fileOf(((await (await post({ clips, soundtrack: { url: "/api/files/uploads/song.wav" } })).json()) as { url: string }).url);
     const soft = fileOf(((await (await post({ clips, soundtrack: { url: "/api/files/uploads/song.wav", volume: 0.25, mix: "under" } })).json()) as { url: string }).url);
     expect(loudness(soft)).toBeLessThan(loudness(full) - 6);
+  });
+
+  it("can be an audio take from the library", async () => {
+    const r = await post({ clips, soundtrack: { take: "m" } });
+    expect(r.status).toBe(200);
+    expect(loudness(fileOf(((await r.json()) as { url: string }).url))).toBeGreaterThan(-30);
+    // A take without finished sound (a video take, or none) can't be one.
+    for (const take of ["a", "nope"]) expect((await post({ clips, soundtrack: { take } })).status).toBe(400);
+  });
+
+  it("is saved with the edit, its length read from the file", async () => {
+    const put = (track: unknown) =>
+      soundtracks.PUT(new Request("http://x", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ track }) }), { params: Promise.resolve({ key: "all" }) } as never);
+    const saved = (await (await put({ take: "m", label: "Theme", start: 99, mix: "under", volume: 3 })).json()) as { track: { seconds: number; start: number; volume: number; mix: string } };
+    expect(saved.track.seconds).toBeCloseTo(6, 0);
+    // A start past the end and a volume over full are brought back in range.
+    expect(saved.track.start).toBeLessThan(6);
+    expect(saved.track.volume).toBe(1);
+    expect(saved.track.mix).toBe("under");
+    expect((await put({ url: "/etc/passwd" })).status).toBe(400);
+    expect(((await (await put(null)).json()) as { track: unknown }).track).toBeNull();
   });
 
   it("only takes a file from the uploads folder", async () => {

@@ -12,7 +12,7 @@ import { isLive, type Job, type JobStatus } from "@/lib/jobs";
 import type { Project } from "@/lib/projects";
 import type { QcReport } from "@/lib/qc";
 import { UNSORTED } from "@/lib/projects";
-import type { Clip } from "@/lib/sequence";
+import type { Clip, Soundtrack } from "@/lib/sequence";
 import type { RecipeSummary } from "@/lib/workflows/types";
 import type { TemplateLibrary } from "@/server/templates";
 
@@ -252,8 +252,11 @@ export class NovaField {
   setSequence = (key: string, clips: (Partial<Clip> & { take: string })[] | string[]) =>
     this.call<{ key: string; clips: Clip[] }>(`/api/sequences/${encodeURIComponent(key)}`, { method: "PUT", json: { clips, origin: "agent" } });
 
-  /** Cut finished takes into one film with ffmpeg on this machine (no GPU, no credits). */
-  assemble = (clips: Clip[], title?: string, soundtrack?: { url: string; start?: number; mix?: "replace" | "under"; volume?: number }) =>
+  /** An edit's saved soundtrack, or null. */
+  soundtrack = (key: string) => this.call<{ key: string; track: Soundtrack | null }>(`/api/soundtracks/${encodeURIComponent(key)}`);
+
+  /** Cut finished takes into one film with ffmpeg on this machine (no GPU, no credits). The soundtrack is an audio take or an uploaded file. */
+  assemble = (clips: Clip[], title?: string, soundtrack?: { url?: string; take?: string; start?: number; mix?: "replace" | "under"; volume?: number }) =>
     this.call<{ id: string; url: string; title: string }>("/api/films", { method: "POST", json: { clips, title, soundtrack } });
 }
 

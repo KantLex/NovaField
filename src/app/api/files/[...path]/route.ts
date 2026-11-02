@@ -18,6 +18,12 @@ const TYPES: Record<string, string> = {
   ".ogg": "audio/ogg",
   ".opus": "audio/ogg",
   ".m4a": "audio/mp4",
+  ".glb": "model/gltf-binary",
+  ".gltf": "model/gltf+json",
+  ".obj": "model/obj",
+  ".ply": "application/octet-stream",
+  ".stl": "model/stl",
+  ".fbx": "application/octet-stream",
 };
 const ROOTS = new Set(["uploads", "media", "films", "assets"]);
 

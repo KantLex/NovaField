@@ -2,12 +2,13 @@
 
 // The timeline: clips at their length, a ruler to scrub, trim handles on each clip's edges, a
 // cut/dissolve switch on each join. Drag a clip to move it; drop a take from the bin to insert it.
+// Under the clips, the soundtrack's lane.
 
 import clsx from "clsx";
-import { FastForward, VolumeX } from "lucide-react";
+import { AudioLines, FastForward, Plus, VolumeX } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import type { Job } from "@/lib/jobs";
-import { timecode, type Clip, type Placed } from "@/lib/sequence";
+import { timecode, type Clip, type Placed, type Soundtrack } from "@/lib/sequence";
 import { tr } from "@/i18n";
 import type { Playhead } from "./playhead";
 import { sourceOf } from "../sequence";
@@ -29,11 +30,14 @@ interface Props {
   onMove: (from: number, to: number) => void;
   onInsert: (take: string, index: number) => void;
   onJoin: (index: number) => void;
+  soundtrack: Soundtrack | null;
+  trackSelected: boolean;
+  onSelectTrack: () => void;
 }
 
 const HANDLE = 7;
 
-export function Timeline({ placed, total, jobs, playhead, scale, selected, onSelect, onTrim, onMove, onInsert, onJoin }: Props) {
+export function Timeline({ placed, total, jobs, playhead, scale, selected, onSelect, onTrim, onMove, onInsert, onJoin, soundtrack, trackSelected, onSelectTrack }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const line = useRef<HTMLDivElement>(null);
   const width = Math.max(total * scale + 160, 300);
@@ -206,6 +210,33 @@ export function Timeline({ placed, total, jobs, playhead, scale, selected, onSel
               {p.clip.join === "dissolve" ? tr("Dissolve") : tr("Cut")}
             </button>
           ))}
+        </div>
+
+        {/* The soundtrack: as long as the film, or shorter if the music runs out first. */}
+        <div className="relative h-[30px] border-t border-white/[0.06]">
+          {soundtrack ? (
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={onSelectTrack}
+              className={clsx(
+                "absolute top-1 bottom-1.5 left-0 flex items-center gap-1.5 overflow-hidden rounded-[3px] bg-daylight/25 px-2 text-left text-[11px] text-ink",
+                trackSelected ? "shadow-[0_0_0_2px_var(--color-daylight)]" : "shadow-[0_0_0_1px_rgba(255,255,255,0.1)]",
+              )}
+              style={{ width: Math.max(40, Math.min(total, soundtrack.seconds ? Math.max(0, soundtrack.seconds - soundtrack.start) : total) * scale) }}
+              title={soundtrack.label}
+            >
+              <AudioLines size={12} className="shrink-0 text-daylight" />
+              <span className="truncate">{soundtrack.label}</span>
+            </button>
+          ) : (
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={onSelectTrack}
+              className={clsx("sticky left-0 mt-1 ml-1 flex items-center gap-1 rounded px-2 py-0.5 text-[11px] hover:bg-raised hover:text-ink", trackSelected ? "text-ink" : "text-faint")}
+            >
+              <Plus size={12} /> {tr("Soundtrack")}
+            </button>
+          )}
         </div>
 
         <div ref={line} className="pointer-events-none absolute top-0 bottom-0 left-0 z-50 w-px bg-tally" aria-hidden>

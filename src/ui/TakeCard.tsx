@@ -2,7 +2,7 @@
 
 import clsx from "clsx";
 import { motion } from "motion/react";
-import { AudioLines, Check, Clapperboard, Film, Image as ImageIcon, Pencil, Star, Workflow, X } from "lucide-react";
+import { AudioLines, Box, Check, Clapperboard, Film, Image as ImageIcon, Pencil, Star, Workflow, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { memo, useEffect, useState } from "react";
 import { KIND_LABEL } from "@/lib/engines/specs";
@@ -59,9 +59,10 @@ const OUTPUT_TAG = {
   video: { label: "Video", icon: Film, tone: "bg-tungsten text-black" },
   image: { label: "Image", icon: ImageIcon, tone: "bg-ink text-surround" },
   audio: { label: "Audio", icon: AudioLines, tone: "bg-daylight text-black" },
+  model: { label: "3D", icon: Box, tone: "bg-[#9fd4b4] text-black" },
 } as const;
 
-/** The corner tag on a take: Video, Image or Audio for shots and workflows; the Henshin tool otherwise. */
+/** The corner tag on a take: Video, Image, Audio or 3D for shots and workflows; the Henshin tool otherwise. */
 export function KindTag({ job, small }: { job: Job; small?: boolean }) {
   const out = job.kind === "shot" || job.kind === "workflow" || job.kind === "image" || job.kind === "grade" ? outputOf(job) : null;
   const tag = out ? OUTPUT_TAG[out] : null;
@@ -103,7 +104,7 @@ export function ScrubFrame({ job, icon = 20 }: { job: Job; icon?: number }) {
         <img src={job.poster} alt="" className="size-full object-cover" />
       ) : (
         <span className="flex size-full items-center justify-center text-faint">
-          <Clapperboard size={icon} />
+          {job.model ? <Box size={icon} /> : job.audio ? <AudioLines size={icon} /> : <Clapperboard size={icon} />}
         </span>
       )}
       {scrub !== null && job.strip && (

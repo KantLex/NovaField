@@ -47,7 +47,7 @@ GPU) or on Comfy Cloud (paid in Comfy credits).
 | **Studio** | Write a shot and direct it: cast, shot size, angle, lens, camera move, light, film stock. Watch the camera move on a live previs before you render. |
 | **Image** | Edit, upscale and widen any picture: a generated still, a video frame or your own photo. |
 | **Henshin** | Transform footage you already have: swap a person, restyle a clip, replace an object, or animate a still along drawn paths. |
-| **Sequence** | Cut takes into a film: trim, split, reorder, cuts and dissolves, export an MP4. |
+| **Sequence** | Cut takes into a film: trim, split, reorder, cuts and dissolves, a soundtrack, export an MP4. |
 | **Library** | Every take, picture and clip, sorted into projects. |
 | **Assets** | Your characters, objects, places, styles and clips, ready to drop into any shot. |
 | **Workflows** | Turn any ComfyUI workflow into a simple form, or open it as a graph. |
@@ -148,12 +148,26 @@ The port is the number after the last colon in the address: `8188` in `http://12
 NovaField itself opens at `http://localhost:4317`. To use another port, start it with:
 
 ```bash
-pnpm exec next dev -p 4400
+pnpm exec next dev -H 127.0.0.1 -p 4400
 ```
 
 Then open **http://localhost:4400**. The command-line tool and AI agents look for NovaField at
 4317, so tell them the new address with `NOVAFIELD_URL`, for example
 `NOVAFIELD_URL=http://localhost:4400 pnpm novafield status`.
+
+#### Using NovaField from another device
+
+NovaField has no accounts, so `pnpm dev` only answers on this computer: nobody else on your Wi-Fi
+can reach it. To open it from a tablet or another computer on a network you trust, start it with:
+
+```bash
+pnpm dev:lan
+```
+
+Then open `http://<this computer's address>:4317` on the other device. Anyone on that network can
+then use it (render on your GPU, read your library, install node packs), so don't do this on public
+Wi-Fi. To reach it by name rather than by address, list the names, for example
+`NOVAFIELD_ALLOWED_HOSTS=studio-mac.local pnpm dev:lan`.
 
 The status at the top shows when the GPU is free, busy with your take, or busy with someone
 else's jobs. On a shared server NovaField only ever cancels its own jobs, so it's safe to use
@@ -302,6 +316,10 @@ NovaField nodes and uses no AI model.
 Add takes to the edit, then trim, split and reorder them, join them with cuts or dissolves, and
 export one MP4. Each project has its own edit.
 
+- **Soundtrack:** lay music or narration under the whole film: an audio take from a music or voice
+  workflow, or a file from your computer. Choose where in it the film starts, whether it replaces
+  the takes' own sound or sits under it, and how loud it plays. It fades out over the last second.
+
 ### Library and Assets
 
 <img src="docs/media/shots/library.jpg" alt="The Library: every take and picture, with projects on the left">
@@ -322,6 +340,10 @@ length, and the settings its author named. The **Form** tab lets you choose what
 rename it.
 
 - A workflow with a prompt and an image or video output also appears as a **model in Studio**.
+- **Any output comes home.** Pictures, clips and sound become takes. A 3D workflow's model (`.glb`,
+  `.gltf`, `.obj`, `.ply`, `.stl` or `.fbx`) opens in a 3D viewer you can turn and zoom, and any
+  view can go on as a picture: a first frame, a cast member, or a picture to edit.
+- Audio takes can become the edit's soundtrack.
 - If your server is missing some of its nodes, NovaField lists them instead of failing halfway.
 - **Graph mode** opens any workflow, or any take, as an editable node graph.
 

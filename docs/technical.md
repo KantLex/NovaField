@@ -63,6 +63,15 @@ NovaField never clears the queue or interrupts blindly. It cancels only its own 
 (`POST /queue {delete}` when pending; a targeted `/interrupt` when running). The header shows when
 the GPU is busy with someone else's jobs.
 
+### Who can reach it (`src/proxy.ts`)
+
+The app has no accounts, so it keeps itself to this computer. `pnpm dev` and `pnpm start` listen
+on `127.0.0.1` only. Every `/api` request must be addressed to `localhost` or a loopback IP, which
+turns away a web page that points its own domain at this computer (DNS rebinding). Changes are
+only accepted from the app's own pages, or from tools that send no `Origin` (the CLI, agents).
+`pnpm dev:lan` (`NOVAFIELD_LAN=1`, listening on every interface) also accepts any IP address, plus
+the names in `NOVAFIELD_ALLOWED_HOSTS`.
+
 ## Feature internals
 
 ### Image (`src/lib/engines/image.ts`, `src/ui/image`)
@@ -129,6 +138,24 @@ the preview; the node measures them again on the GPU.
 
 `needsLook` flags a report with a score under 85 or a high-severity issue. The report format is in
 [contract.md](contract.md#novashotqc-040).
+
+### Workflow outputs: pictures, clips, sound and 3D (`src/server/comfy.ts`, `src/ui/ModelTake.tsx`)
+
+`mainOutput` picks what a finished prompt made: a 3D model first, then a video, an image, audio.
+Save nodes list a model as a file under `"3d"` (or any other key), and `Preview3D` only names its
+path in `"result"`; `modelOutput` reads both, for `.glb`, `.gltf`, `.obj`, `.ply`, `.stl` and
+`.fbx`. A picture the workflow also saved becomes the take's poster. Without one, the browser's
+three.js viewer renders the first view and sends it to `PUT /api/jobs/<id>/poster` (JPEG, once).
+`detectOutput` reads a workflow that saves a mesh as `"model"`, so it never shows up as a Studio
+model.
+
+### Soundtrack (`src/server/soundtracks.ts`, `src/ui/edit/SoundtrackPanel.tsx`)
+
+Each edit can have one soundtrack: an audio take (`take`) or a file uploaded with purpose `track`
+(`url`), with `start` (seconds into it at the film's first frame), `mix` (`replace` or `under`, the
+takes at `UNDER_LEVEL`) and `volume`. `soundtrackFile` is the only way from a soundtrack to a file
+on disk. The program monitor plays it in sync with the playhead and mixes the takes as the export
+does; `assemble` lays it under the cut with a one-second fade at the end.
 
 ## The ComfyUI-NovaField node pack
 
@@ -259,7 +286,7 @@ without your shell's PATH and from another folder, so a bare `pnpm` often isn't 
 | `list_assets` / `register_asset` | The cast and asset library; add a character with its pictures |
 | `list_projects` / `organise_takes` | Move takes into a project (creating it if asked), star them |
 | `get_edit` / `set_edit` | The Sequence editor's timeline for a project: clips with in/out and cut or dissolve |
-| `assemble_film` | Cuts the edit into one MP4 with ffmpeg on this machine (no GPU, no credits), optionally under a `soundtrack` |
+| `assemble_film` | Cuts the edit into one MP4 with ffmpeg on this machine (no GPU, no credits), under the edit's saved soundtrack or a `soundtrack` file or audio take |
 | `recast` | Henshin: swaps the person in a clip for a character, keeping motion and camera |
 | `restyle` | Henshin: re-renders a clip in a new look, shot for shot |
 | `replace_object` | Henshin: tracks a box over a thing and turns it into something else |
@@ -294,7 +321,7 @@ Image, Grade and Shot QC. Every command that renders only plans and prints the p
 | Check | `qc <take>`: score, and each fault with its time |
 | Library | `takes`, `take`, `cancel`, `frame`, `move`, `star`, `projects`, `assets`, `asset` |
 | Workflows | `find-workflows`, `import <file \| template:<name> \| saved:<path>>` |
-| Edit | `edit`, `edit set <clip>…`, `film [--soundtrack]`, `setup` |
+| Edit | `edit`, `edit set <clip>…`, `film [--soundtrack \| --no-soundtrack]`, `setup` |
 
 Pictures and clips are written the same way everywhere: `asset:<id>`, `take:<id>` (with `@<seconds>`
 for one frame of it), a file path, or a bare take or asset id. Shared render options: `--project`,
@@ -361,13 +388,14 @@ Storage:
 |---|---|
 | `jobs.json` | Every take: its spec, status, files, QC report |
 | `projects.json`, `sequences.json` | Projects, and one edit per project (`GET`/`PUT /api/sequences/<project id or "all">`) |
+| `soundtracks.json` | Each edit's soundtrack (`GET`/`PUT /api/soundtracks/<project id or "all">`) |
 | `assets.json`, `assets/` | The asset library and its files |
 | `media/`, `films/`, `uploads/` | Renders, assembled films, uploads |
 | `workflows/` | Imported workflows and their forms |
 | `connection.json` | The server and API keys |
 | `storage.json` | Where the media folders live |
 
-The editor and agents share `sequences.json`, so an open editor updates live.
+The editor and agents share `sequences.json` and `soundtracks.json`, so an open editor updates live.
 
 ## Layout
 

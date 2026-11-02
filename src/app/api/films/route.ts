@@ -3,15 +3,16 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { layout, normalize, sanitize, type Clip } from "@/lib/sequence";
 import { assemble, dirs, ensureDirs, probe, type Soundtrack } from "@/server/media";
+import { soundtrackFile } from "@/server/soundtracks";
 import { STORE } from "@/server/store";
 import { say } from "@/lib/say";
 
 // Cut an edit into one film: clips trimmed to their in and out points, joined by cuts or dissolves,
-// optionally under a soundtrack uploaded with purpose "track". Older callers send `takes` (whole
-// takes); those become clips without their repeated head frames.
+// optionally under a soundtrack: an audio take, or a file uploaded with purpose "track". Older
+// callers send `takes` (whole takes); those become clips without their repeated head frames.
 export async function POST(request: Request) {
   await ensureDirs();
-  const body = (await request.json()) as { clips?: Clip[]; takes?: string[]; title?: string; soundtrack?: Omit<Soundtrack, "file"> & { url: string } };
+  const body = (await request.json()) as { clips?: Clip[]; takes?: string[]; title?: string; soundtrack?: Omit<Soundtrack, "file"> & { url?: string; take?: string } };
   const ids = [...new Set([...(body.clips ?? []).map((c) => c.take), ...(body.takes ?? [])])];
   const jobs = new Map((await Promise.all(ids.map((id) => STORE.get(id)))).flatMap((j) => (j ? [[j.id, j] as const] : [])));
   const source = (t: string) => {
@@ -33,10 +34,13 @@ export async function POST(request: Request) {
   }
   let soundtrack: Soundtrack | undefined;
   if (body.soundtrack) {
-    // Only a file uploaded here: its URL names a file in the uploads folder, nothing else.
-    const name = body.soundtrack.url.startsWith("/api/files/uploads/") ? path.basename(body.soundtrack.url) : "";
-    const file = name && path.join(dirs.uploads, name);
-    if (!file || !existsSync(file)) return Response.json({ error: say("Upload the soundtrack first (purpose “track”).") }, { status: 400 });
+    // Only an audio take or a file uploaded here, nothing else on disk.
+    let file: string;
+    try {
+      file = await soundtrackFile(body.soundtrack);
+    } catch (e) {
+      return Response.json({ error: e instanceof Error ? e.message : String(e) }, { status: 400 });
+    }
     const { start, mix, volume } = body.soundtrack;
     soundtrack = { file, start: Math.max(0, Number(start) || 0), mix: mix === "under" ? "under" : "replace", volume: Math.min(1, Math.max(0, volume ?? 1)) };
   }

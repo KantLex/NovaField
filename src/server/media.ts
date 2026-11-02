@@ -3,6 +3,7 @@
 import { execFile } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { promisify } from "node:util";
+import { UNDER_LEVEL } from "@/lib/sequence";
 import { FFMPEG, FFPROBE } from "./config";
 import { folderPath } from "./storage";
 
@@ -180,7 +181,7 @@ export async function assemble(parts: EditPart[], output: string, size: { width:
       `[${n}:a]atrim=start=${(soundtrack.start ?? 0).toFixed(4)},asetpts=PTS-STARTPTS,aresample=48000,aformat=channel_layouts=stereo,volume=${(soundtrack.volume ?? 1).toFixed(3)},apad,atrim=duration=${length.toFixed(4)},afade=t=out:st=${fadeAt.toFixed(4)}:d=1[music]`,
     );
     if (soundtrack.mix === "under") {
-      filters.push(`[${a}]volume=0.35[takes]`, `[takes][music]amix=inputs=2:duration=first:normalize=0[mixed]`);
+      filters.push(`[${a}]volume=${UNDER_LEVEL}[takes]`, `[takes][music]amix=inputs=2:duration=first:normalize=0[mixed]`);
       a = "mixed";
     } else {
       // ffmpeg won't leave a stream unused: the takes' sound goes nowhere.

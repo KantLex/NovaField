@@ -26,8 +26,8 @@ export interface Compiled {
     seconds: number;
     /** Frames at the head that repeat the previous take (extend); dropped when assembling. */
     trimHead: number;
-    /** What the take is: a clip, a still or sound. Missing on takes from before it was recorded. */
-    output?: "video" | "image" | "audio";
+    /** What the take is: a clip, a still, sound or a 3D model. Missing on takes from before it was recorded. */
+    output?: "video" | "image" | "audio" | "model";
     notes: string[];
     cameraPath?: unknown;
     /** The previs clip the take followed, to compare against (browser URL). */

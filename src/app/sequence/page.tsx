@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Download, FastForward, LoaderCircle, Pause, Play, Plus, Redo2, Scissors, SkipBack, SkipForward, SplitSquareHorizontal, Trash2, Undo2, Volume2, VolumeX } from "lucide-react";
+import { AudioLines, Download, FastForward, LoaderCircle, Pause, Play, Plus, Redo2, Scissors, SkipBack, SkipForward, SplitSquareHorizontal, Trash2, Undo2, Volume2, VolumeX } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Job } from "@/lib/jobs";
@@ -12,7 +12,8 @@ import { Playhead } from "@/ui/edit/playhead";
 import { Program } from "@/ui/edit/Program";
 import { TAKE_MIME, Timeline } from "@/ui/edit/Timeline";
 import { inView, useProjects } from "@/ui/projects";
-import { sourceOf, useSequence } from "@/ui/sequence";
+import { sourceOf, useSequence, useSoundtrack } from "@/ui/sequence";
+import { SoundtrackPanel } from "@/ui/edit/SoundtrackPanel";
 import { sequenceKey, useLive, useStudio } from "@/ui/state";
 import { tr } from "@/i18n";
 import { shatter } from "@/ui/shatter";
@@ -30,7 +31,18 @@ export default function SequencePage() {
   const [film, setFilm] = useState<{ url: string; title: string } | null>(null);
   const [building, setBuilding] = useState(false);
   const [title, setTitle] = useState(() => tr("Untitled film"));
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelectedClip] = useState<string | null>(null);
+  // The soundtrack's panel shows instead of the clip's while its lane is selected.
+  const [track, setTrack] = useSoundtrack();
+  const [trackSel, setTrackSel] = useState(false);
+  const setSelected = (id: string | null) => {
+    setSelectedClip(id);
+    if (id) setTrackSel(false);
+  };
+  const selectTrack = () => {
+    setSelectedClip(null);
+    setTrackSel(true);
+  };
   const [scale, setScale] = useState(48);
   // While a trim handle is dragged the edit updates here, and is saved (with undo) on release.
   const [draft, setDraft] = useState<Clip[] | null>(null);
@@ -112,7 +124,10 @@ export default function SequencePage() {
     else if (k === "i") markAtPlayhead("in");
     else if (k === "o") markAtPlayhead("out");
     else if ((k === "backspace" || k === "delete") && selected) remove(selected);
-    else if (k === "escape") setSelected(null);
+    else if (k === "escape") {
+      setSelected(null);
+      setTrackSel(false);
+    }
     else return;
     e.preventDefault();
   });
@@ -122,18 +137,29 @@ export default function SequencePage() {
   const candidates = useMemo(
     () =>
       Object.values(jobs)
-        .filter((j) => j.status === "done" && !!j.video && inView(j, current))
+        .filter((j) => j.status === "done" && (!!j.video || !!j.audio) && inView(j, current))
         .sort((a, b) => b.createdAt - a.createdAt)
         .slice(0, 36),
     [jobs, current],
   );
   const inEdit = useMemo(() => new Set(saved.map((c) => c.take)), [saved]);
+  const audioTakes = useMemo(
+    () =>
+      Object.values(jobs)
+        .filter((j) => j.status === "done" && !!j.audio && !j.video && inView(j, current))
+        .sort((a, b) => b.createdAt - a.createdAt),
+    [jobs, current],
+  );
+  const pickTrack = (j: Job) => {
+    setTrack({ take: j.id, label: j.title, start: 0, mix: track?.mix ?? "replace", volume: track?.volume ?? 1 });
+    selectTrack();
+  };
 
   const assemble = async () => {
     setBuilding(true);
     playhead.setPlaying(false);
     try {
-      setFilm(await api.assemble(saved, title));
+      setFilm(await api.assemble(saved, title, track));
       toast(tr("Film assembled."), "done");
     } catch (e) {
       fail(e);
@@ -185,7 +211,7 @@ export default function SequencePage() {
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="flex min-w-0 flex-col gap-2">
           <div className="mx-auto w-full" style={{ maxWidth: `min(100%, calc(46vh * ${aspect}))` }}>
-            <Program placed={placed} jobs={jobs} playhead={playhead} aspect={aspect} />
+            <Program placed={placed} jobs={jobs} playhead={playhead} aspect={aspect} soundtrack={track} />
           </div>
           {/* Transport. */}
           <div className="flex flex-wrap items-center gap-1.5 text-[13px]">
@@ -227,6 +253,9 @@ export default function SequencePage() {
           </div>
         </div>
 
+        {trackSel ? (
+          <SoundtrackPanel track={track} audioTakes={audioTakes} total={total} onChange={setTrack} />
+        ) : (
         <ClipPanel
           clip={sel?.clip ?? null}
           job={sel ? jobs[sel.clip.take] : undefined}
@@ -239,7 +268,9 @@ export default function SequencePage() {
             commit([...saved.slice(0, sel.index + 1), c, ...saved.slice(sel.index + 1)]);
             setSelected(c.id);
           }}
+          onSoundtrack={selectTrack}
         />
+        )}
       </div>
 
       {clips.length === 0 ? (
@@ -266,6 +297,9 @@ export default function SequencePage() {
           onMove={(from, to) => commit(move(saved, from, to))}
           onInsert={insert}
           onJoin={(i) => update(saved[i].id, { join: saved[i].join === "dissolve" ? "cut" : "dissolve" })}
+          soundtrack={track}
+          trackSelected={trackSel}
+          onSelectTrack={selectTrack}
         />
       )}
       <p className="text-[12px] text-faint">
@@ -277,7 +311,7 @@ export default function SequencePage() {
           <video src={film.url} controls className="w-full rounded-[3px] bg-black" />
           <div className="flex flex-col gap-3 p-1">
             <h2 className="display text-[20px]">{film.title}</h2>
-            <p className="text-[13px] text-dim">{tr("Cut at 24 fps, with your trims, dissolves and muted clips.")}</p>
+            <p className="text-[13px] text-dim">{tr(track ? "Cut at 24 fps, with your trims, dissolves, muted clips and the soundtrack." : "Cut at 24 fps, with your trims, dissolves and muted clips.")}</p>
             <a href={film.url} download={`${film.title}.mp4`} className="inline-flex items-center gap-1.5 self-start rounded-md bg-tungsten px-3 py-1.5 text-[13px] font-semibold text-black">
               <Download size={14} /> {tr("Download MP4")}
             </a>
@@ -291,7 +325,17 @@ export default function SequencePage() {
           <p className="text-[13px] text-faint">{tr("Nothing to add yet.")}</p>
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3">
-            {candidates.map((c) => (
+            {candidates.map((c) =>
+              !c.video ? (
+                // An audio take goes under the film as its soundtrack.
+                <button key={c.id} onClick={() => pickTrack(c)} className="group flex flex-col gap-1 text-left" aria-label={tr("Use {name} as the soundtrack", { name: c.title })}>
+                  <span className="relative flex aspect-video items-center justify-center overflow-hidden rounded-[3px] bg-daylight/15 text-daylight">
+                    <AudioLines size={22} />
+                    {(track?.take === c.id) && <span className="absolute top-1 left-1 rounded bg-daylight px-1 text-[10px] font-semibold text-black">{tr("Soundtrack")}</span>}
+                  </span>
+                  <span className="truncate text-[12px] text-dim">{c.title}</span>
+                </button>
+              ) : (
               <button
                 key={c.id}
                 draggable
@@ -313,7 +357,8 @@ export default function SequencePage() {
                 </span>
                 <span className="truncate text-[12px] text-dim">{c.title}</span>
               </button>
-            ))}
+              ),
+            )}
           </div>
         )}
       </section>
@@ -322,9 +367,32 @@ export default function SequencePage() {
 }
 
 /** The selected clip: its in and out, how it joins the clip before, its sound. */
-function ClipPanel({ clip, job, index, onChange, onRemove, onDuplicate }: { clip: Clip | null; job: Job | undefined; index: number; onChange: (c: Partial<Clip>) => void; onRemove: () => void; onDuplicate: () => void }) {
+function ClipPanel({
+  clip,
+  job,
+  index,
+  onChange,
+  onRemove,
+  onDuplicate,
+  onSoundtrack,
+}: {
+  clip: Clip | null;
+  job: Job | undefined;
+  index: number;
+  onChange: (c: Partial<Clip>) => void;
+  onRemove: () => void;
+  onDuplicate: () => void;
+  onSoundtrack: () => void;
+}) {
   if (!clip || !job) {
-    return <aside className="hidden rounded-md bg-panel p-4 text-[13px] text-dim lg:block">{tr("Select a clip to trim it, change how it joins the one before, or mute it.")}</aside>;
+    return (
+      <aside className="hidden flex-col items-start gap-3 rounded-md bg-panel p-4 text-[13px] text-dim lg:flex">
+        {tr("Select a clip to trim it, change how it joins the one before, or mute it.")}
+        <Button onClick={onSoundtrack}>
+          <AudioLines size={14} /> {tr("Soundtrack")}
+        </Button>
+      </aside>
+    );
   }
   const src = sourceOf(job);
   const num = (edge: "in" | "out") => (

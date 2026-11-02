@@ -1,6 +1,6 @@
 "use client";
 
-// A finished take on screen: its video (with the ghost rig or previs it was made from laid over it), picture or sound.
+// A finished take on screen: its video (with the ghost rig or previs it was made from laid over it), picture, sound or 3D model.
 
 import clsx from "clsx";
 import { Ghost, ImageDown, Pause, Play, Volume2, VolumeX } from "lucide-react";
@@ -16,9 +16,11 @@ import { onSeek } from "./Qc";
 import { PICTURE_TARGETS, sendTakePicture } from "./sendTo";
 import { tr } from "@/i18n";
 import { PrevisPip } from "@/ui/MonitorOverlays";
+import { ModelTake } from "./ModelTake";
 
 export function TakePlayer({ job, autoPlay = true, onRatio }: { job: Job; autoPlay?: boolean; onRatio?: (ratio: number) => void }) {
   const [inspecting, setInspecting] = useState(false);
+  if (job.model) return <ModelTake key={job.id} job={job} />;
   if (!job.video && job.image) {
     return (
       <div className="group absolute inset-0">

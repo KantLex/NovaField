@@ -61,6 +61,14 @@ NovaField がキューをクリアしたり、やみくもに中断したりす�
 （待機中なら `POST /queue {delete}`、実行中なら対象を絞った `/interrupt`）。ほかの人のジョブで GPU が使用中のときは、
 ヘッダーにそう表示されます。
 
+### アクセスできる範囲（`src/proxy.ts`）
+
+アプリにはアカウントがないため、このコンピューターの中だけで動きます。`pnpm dev` と `pnpm start` は `127.0.0.1` だけで待ち受けます。
+`/api` へのリクエストはすべて `localhost` かループバック IP 宛てでなければならず、自分のドメインをこのコンピューターに向けた
+Web ページ（DNS リバインディング）は拒否されます。変更を受け付けるのは、アプリ自身のページか、`Origin` を送らないツール（CLI、エージェント）からだけです。
+`pnpm dev:lan`（`NOVAFIELD_LAN=1`、すべてのインターフェースで待ち受け）では、任意の IP アドレスと、
+`NOVAFIELD_ALLOWED_HOSTS` に挙げた名前も受け付けます。
+
 ## 機能の内部構造
 
 ### 画像（`src/lib/engines/image.ts`、`src/ui/image`）
@@ -122,6 +130,23 @@ LoadVideo → GetVideoComponents
 
 `needsLook` は、スコアが 85 未満か、重大度の高い不具合を含むレポートに印を付けます。レポートの形式は
 [contract.md](contract.md#novashotqc-040) にあります。
+
+### ワークフローの出力：画像、クリップ、音声、3D（`src/server/comfy.ts`、`src/ui/ModelTake.tsx`）
+
+`mainOutput` は、完了したプロンプトが作ったものを選びます。優先順は 3D モデル、動画、画像、音声です。
+保存ノードはモデルを `"3d"`（または別のキー）の下にファイルとして示し、`Preview3D` は `"result"` にパスだけを書きます。
+`modelOutput` はその両方を、`.glb`、`.gltf`、`.obj`、`.ply`、`.stl`、`.fbx` について読みます。ワークフローが画像も保存していれば、
+それがテイクのポスターになります。なければ、ブラウザの three.js ビューアーが最初の表示を描き、
+`PUT /api/jobs/<id>/poster`（JPEG、1 回だけ）に送ります。メッシュを保存するワークフローは `detectOutput` が `"model"` と判定するので、
+スタジオのモデルには出てきません。
+
+### サウンドトラック（`src/server/soundtracks.ts`、`src/ui/edit/SoundtrackPanel.tsx`）
+
+各編集にはサウンドトラックをひとつ付けられます。音声テイク（`take`）か、purpose `track` でアップロードしたファイル（`url`）に、
+`start`（映像の最初のフレームが曲の何秒目か）、`mix`（`replace` か `under`。`under` ではテイクの音が `UNDER_LEVEL` になります）、
+`volume` を組み合わせます。サウンドトラックからディスク上のファイルへたどる方法は `soundtrackFile` だけです。
+プログラムモニターはそれを再生ヘッドに合わせて鳴らし、テイクの音を書き出しと同じようにミックスします。
+`assemble` はそれを編集の下に敷き、最後の 1 秒でフェードアウトさせます。
 
 ## ComfyUI-NovaField ノードパック
 
@@ -250,7 +275,7 @@ pnpm novafield setup
 | `list_assets` / `register_asset` | キャストとアセットライブラリ。キャラクターを画像付きで追加します |
 | `list_projects` / `organise_takes` | テイクをプロジェクトに移動し（指定があればプロジェクトを作成します）、スターを付けます |
 | `get_edit` / `set_edit` | プロジェクトのシーケンスエディターのタイムライン：イン点・アウト点と、カットまたはディゾルブを持つクリップ |
-| `assemble_film` | このマシン上の ffmpeg で編集を 1 本の MP4 にまとめます（GPU もクレジットも不要）。`soundtrack` を下に敷くこともできます |
+| `assemble_film` | このマシン上の ffmpeg で編集を 1 本の MP4 にまとめます（GPU もクレジットも不要）。編集に保存したサウンドトラック、または `soundtrack` のファイルか音声テイクを下に敷きます |
 | `recast` | 変身：動きとカメラはそのままに、クリップの人物をキャラクターに差し替えます |
 | `restyle` | 変身：クリップをショットごとに新しいルックで描き直します |
 | `replace_object` | 変身：物を枠で追跡し、別のものに変えます |
@@ -285,7 +310,7 @@ pnpm novafield setup
 | チェック | `qc <take>`：スコアと、各不具合とその時刻 |
 | ライブラリ | `takes`、`take`、`cancel`、`frame`、`move`、`star`、`projects`、`assets`、`asset` |
 | ワークフロー | `find-workflows`、`import <file \| template:<name> \| saved:<path>>` |
-| 編集 | `edit`、`edit set <clip>…`、`film [--soundtrack]`、`setup` |
+| 編集 | `edit`、`edit set <clip>…`、`film [--soundtrack \| --no-soundtrack]`、`setup` |
 
 画像とクリップの指定方法はどこでも共通です：`asset:<id>`、`take:<id>`（その 1 フレームを指すなら `@<seconds>` を付けます）、
 ファイルパス、またはテイクやアセットの ID そのもの。レンダリングの共通オプションは `--project`、
@@ -351,13 +376,14 @@ NovaField が保存するものはすべて `data/`（git の管理外）か、�
 |---|---|
 | `jobs.json` | すべてのテイク：スペック、状態、ファイル、QC レポート |
 | `projects.json`, `sequences.json` | プロジェクトと、プロジェクトごとにひとつの編集（`GET`/`PUT /api/sequences/<project id or "all">`） |
+| `soundtracks.json` | 各編集のサウンドトラック（`GET`/`PUT /api/soundtracks/<project id or "all">`） |
 | `assets.json`, `assets/` | アセットライブラリとそのファイル |
 | `media/`, `films/`, `uploads/` | レンダリング結果、組み立てた映画、アップロード |
 | `workflows/` | 読み込んだワークフローとそのフォーム |
 | `connection.json` | サーバーと API キー |
 | `storage.json` | メディアフォルダの保存場所 |
 
-エディターとエージェントは `sequences.json` を共有しているので、開いているエディターもリアルタイムに更新されます。
+エディターとエージェントは `sequences.json` と `soundtracks.json` を共有しているので、開いているエディターもリアルタイムに更新されます。
 
 ## コード構成
 

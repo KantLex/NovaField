@@ -21,6 +21,26 @@ export interface Source {
   trimHead?: number;
 }
 
+/**
+ * Music or narration laid under the whole edit: an audio take from the library, or an audio file
+ * uploaded for it. The film starts `start` seconds into it; it fades out over the film's last second.
+ */
+export interface Soundtrack {
+  take?: string;
+  url?: string;
+  label: string;
+  start: number;
+  /** "replace": the only sound in the film; "under": the takes' own sound stays, lowered, above it. */
+  mix: "replace" | "under";
+  /** 0–1. */
+  volume: number;
+  /** How long the file runs, when known. */
+  seconds?: number;
+}
+
+/** How loud the takes' own sound stays under a soundtrack mixed "under". */
+export const UNDER_LEVEL = 0.35;
+
 export const DISSOLVE = 0.5;
 /** Shortest a clip can be trimmed to. */
 export const MIN_CLIP = 0.2;

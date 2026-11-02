@@ -98,6 +98,8 @@ function consumers(graph: ApiGraph, id: string, hops = 3): { node: string; input
 
 export function detectOutput(graph: ApiGraph, info: ObjectInfo): OutputKind {
   const outs = Object.values(graph).filter((n) => isOutputNode(n.class_type, info)).map((n) => n.class_type);
+  // A workflow that saves a mesh makes a 3D model, even if it also saves preview pictures.
+  if (outs.some((c) => /3d|glb|gltf|mesh|trellis|(save|export|preview)_?(ply|obj|stl|fbx)/i.test(c))) return "model";
   if (outs.some((c) => /video|webm|webp|gif|combine|mp4/i.test(c))) return "video";
   if (outs.some((c) => /image/i.test(c))) return "image";
   if (outs.some((c) => /audio|flac|mp3|wav/i.test(c))) return "audio";
