@@ -42,6 +42,7 @@ const jobs = await import("./jobs/[id]/route");
 const use = await import("./jobs/[id]/use/route");
 const sequences = await import("./sequences/[key]/route");
 const storage = await import("./storage/route");
+const files = await import("./files/[...path]/route");
 
 const ctx = <T extends Record<string, string>>(params: T) => ({ params: Promise.resolve(params) }) as never;
 const json = (method: string, body: unknown) => new Request("http://x", { method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -77,6 +78,26 @@ describe("the edit", () => {
     const { clips } = (await r.json()) as { clips: { in: number; out: number }[] };
     expect(clips[0].out).toBeGreaterThan(clips[0].in);
     expect((await sequences.GET(new Request("http://x"), ctx({ key: "../etc" }))).status).toBe(400);
+  });
+});
+
+describe("files", () => {
+  const at = (...path: string[]) => ({ params: Promise.resolve({ path }) }) as never;
+  const get = (headers: Record<string, string> = {}) => files.GET(new Request("http://x", { headers }), at("uploads", "clip.mp4"));
+
+  it("serves byte ranges, and says the file hasn't changed when the browser asks again", async () => {
+    const whole = await get();
+    expect(await whole.text()).toBe("clip");
+    const etag = whole.headers.get("etag")!;
+    expect(etag).toMatch(/^".+"$/);
+    expect((await get({ "if-none-match": etag })).status).toBe(304);
+    const part = await get({ range: "bytes=1-2" });
+    expect(part.status).toBe(206);
+    expect(await part.text()).toBe("li");
+    // A range for an older version of the file gets the whole of this one.
+    expect((await get({ range: "bytes=1-2", "if-range": '"old"' })).status).toBe(200);
+    expect((await get({ range: "bytes=1-2", "if-range": etag })).status).toBe(206);
+    expect((await files.GET(new Request("http://x"), at("uploads", "..", "jobs.json"))).status).toBe(404);
   });
 });
 

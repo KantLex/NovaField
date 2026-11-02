@@ -297,23 +297,50 @@ export function GradeCanvas({
       [gl.TEXTURE_MAG_FILTER, gl.LINEAR],
     ])
       gl.texParameteri(gl.TEXTURE_2D, k, v);
-    const u = (name: string) => gl.getUniformLocation(prog, name);
+    const locations = new Map<string, WebGLUniformLocation | null>();
+    const u = (name: string) => {
+      if (!locations.has(name)) locations.set(name, gl.getUniformLocation(prog, name));
+      return locations.get(name)!;
+    };
     let walk: [number, number][] = [];
     let walkKey = "";
     let raf = 0;
 
+    // Draw only when there's something new to show: a frame of the clip, a change to the grade or
+    // the size. Paused, the preview costs nothing; playing, it draws at the clip's own frame rate
+    // rather than the screen's. Browsers without frame callbacks watch the clip's time instead.
+    let fresh = true;
+    let drawn: typeof settings.current | null = null;
+    let drawnAt = -1;
+    const byFrame = typeof video.requestVideoFrameCallback === "function";
+    let frameCall = 0;
+    const onFrame = () => {
+      fresh = true;
+      frameCall = video.requestVideoFrameCallback(onFrame);
+    };
+    if (byFrame) frameCall = video.requestVideoFrameCallback(onFrame);
+    const refresh = () => (fresh = true);
+    video.addEventListener("loadeddata", refresh);
+    video.addEventListener("seeked", refresh);
+
     const draw = () => {
       raf = requestAnimationFrame(draw);
       if (video.readyState < 2 || !video.videoWidth) return;
-      const { film: f, split: sp, fps: rate, seed: sd, match: mt } = settings.current;
-      const W = video.videoWidth;
-      const H = video.videoHeight;
-      setRatio((r) => (Math.abs(r - W / H) > 1e-3 ? W / H : r));
       // Draw at the size shown (not the clip's), so the blurs stay cheap.
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const w = Math.max(1, Math.round(c.clientWidth * dpr));
       const h = Math.max(1, Math.round(c.clientHeight * dpr));
-      if (c.width !== w || c.height !== h) {
+      const resized = c.width !== w || c.height !== h;
+      if (!byFrame && video.currentTime !== drawnAt) fresh = true;
+      if (!fresh && !resized && drawn === settings.current) return;
+      fresh = false;
+      drawn = settings.current;
+      drawnAt = video.currentTime;
+      const { film: f, split: sp, fps: rate, seed: sd, match: mt } = settings.current;
+      const W = video.videoWidth;
+      const H = video.videoHeight;
+      setRatio((r) => (Math.abs(r - W / H) > 1e-3 ? W / H : r));
+      if (resized) {
         c.width = w;
         c.height = h;
       }
@@ -374,6 +401,9 @@ export function GradeCanvas({
     raf = requestAnimationFrame(draw);
     return () => {
       cancelAnimationFrame(raf);
+      if (byFrame) video.cancelVideoFrameCallback(frameCall);
+      video.removeEventListener("loadeddata", refresh);
+      video.removeEventListener("seeked", refresh);
       gl.deleteTexture(tex);
       gl.deleteBuffer(buf);
       gl.deleteProgram(prog);

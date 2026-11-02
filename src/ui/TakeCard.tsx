@@ -12,7 +12,7 @@ import { startTakeDrag } from "./dragTakes";
 import { TakePlayer } from "./TakePlayer";
 import { QcBadge } from "./Qc";
 import { canEditAsWorkflow, editAsWorkflow, TakeActions } from "./TakeActions";
-import { intlLocale, tr } from "@/i18n";
+import { dateFormat, tr } from "@/i18n";
 
 export type TakeFilter = "all" | "video" | "image" | "shots" | "henshin" | "workflows" | "starred";
 
@@ -47,8 +47,9 @@ export function matchesFilter(j: Job, f: TakeFilter): boolean {
 /** Takes grouped by the day they were made, newest first. */
 export function byDay(list: Job[]) {
   const out: { day: string; jobs: Job[] }[] = [];
+  const format = dateFormat({ weekday: "long", month: "long", day: "numeric" });
   for (const j of [...list].sort((a, b) => b.createdAt - a.createdAt)) {
-    const day = new Date(j.createdAt).toLocaleDateString(intlLocale(), { weekday: "long", month: "long", day: "numeric" });
+    const day = format.format(j.createdAt);
     if (out[out.length - 1]?.day !== day) out.push({ day, jobs: [] });
     out[out.length - 1].jobs.push(j);
   }
@@ -101,7 +102,7 @@ export function ScrubFrame({ job, icon = 20 }: { job: Job; icon?: number }) {
         />
       ) : job.poster ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={job.poster} alt="" className="size-full object-cover" />
+        <img src={job.poster} alt="" loading="lazy" decoding="async" className="size-full object-cover" />
       ) : (
         <span className="flex size-full items-center justify-center text-faint">
           {job.model ? <Box size={icon} /> : job.audio ? <AudioLines size={icon} /> : <Clapperboard size={icon} />}

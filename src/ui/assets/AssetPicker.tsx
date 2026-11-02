@@ -271,7 +271,7 @@ function EntryCard({
       <button onClick={onPick} disabled={busy} className="relative aspect-[4/5] overflow-hidden rounded-[5px] bg-surround shadow-[0_0_0_1px_var(--color-line)] hover:shadow-[0_0_0_1px_var(--color-dim)]">
         {cover?.poster && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={cover.poster} alt="" className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
+          <img src={cover.poster} alt="" loading="lazy" decoding="async" className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
         )}
         <span className="absolute top-1.5 left-1.5 rounded bg-black/70 px-1.5 text-[10px] font-semibold text-ink/90">{tr(kind?.label ?? "")}</span>
         {entry.favorite && <Star size={12} className="absolute top-1.5 right-1.5 fill-tungsten text-tungsten" />}
@@ -303,7 +303,7 @@ function TakeTile({ job, video, busy, onPick }: { job: Job; video: boolean; busy
       <button onClick={onPick} disabled={busy} className="relative aspect-video overflow-hidden rounded-[5px] bg-surround shadow-[0_0_0_1px_var(--color-line)] hover:shadow-[0_0_0_1px_var(--color-dim)]">
         {(job.poster || job.image) && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={job.poster || job.image} alt="" className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
+          <img src={job.poster || job.image} alt="" loading="lazy" decoding="async" className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
         )}
         {video && <span className="absolute top-1.5 left-1.5 rounded bg-black/70 px-1.5 text-[10px] font-semibold text-ink/90">{tr("Video")}{seconds ? ` ${seconds.toFixed(1)}s` : ""}</span>}
         {job.favorite && <Star size={12} className="absolute top-1.5 right-1.5 fill-tungsten text-tungsten" />}
@@ -338,7 +338,7 @@ function EntryFiles({ entry, files, mode, chosen, onToggle }: { entry: AssetEntr
             >
               {it.poster && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={it.poster} alt={it.label ?? ""} className="size-full object-cover" />
+                <img src={it.poster} alt={it.label ?? ""} loading="lazy" decoding="async" className="size-full object-cover" />
               )}
               {it.kind !== "image" && <span className="absolute top-1.5 left-1.5 rounded bg-black/70 px-1.5 text-[10px] font-semibold">{it.kind === "video" ? `Video ${it.duration ? `${it.duration.toFixed(1)}s` : ""}` : "Audio"}</span>}
               {it.label && <span className="absolute inset-x-0 bottom-0 truncate bg-black/60 px-1.5 py-0.5 text-left text-[11px]">{it.label}</span>}

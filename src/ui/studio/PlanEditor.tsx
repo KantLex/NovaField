@@ -8,7 +8,7 @@ import { forkRig, type CustomRig } from "@/lib/cinema/custom";
 import { useHotkeys } from "../hotkeys";
 import { Menu, MenuItem } from "../Menu";
 import { fail } from "../api";
-import { usePrevis } from "../previs";
+import { previsFrame, usePrevis } from "../previs";
 import { RigView } from "../RigView";
 import { canFrame, frameMarkA, type Framing } from "./framing";
 import { ModelThumb, useModelTakes, type ModelTake } from "./modelTakes";
@@ -35,7 +35,7 @@ import {
 } from "./planGeometry";
 import { PlanInspector, SaveMove } from "./PlanInspector";
 import { redoRig, undoRig, useRigHistory } from "./rigHistory";
-import { tr } from "@/i18n";
+import { tr, useLocale } from "@/i18n";
 
 /**
  * The floor plan, seen from above or in 3D. Drag the camera marks (A, B and any points between),
@@ -122,21 +122,37 @@ export function PlanEditor({
     if (!c) return;
     const ctx = c.getContext("2d")!;
     let raf = 0;
+    // The size on screen, kept by the observer rather than measured (a layout) every frame.
+    let css = { w: 1, h: 1 };
+    let drawn = "";
+    let shown: [unknown, unknown] = [null, null];
     const resize = () => {
       const dpr = Math.min(2, devicePixelRatio || 1);
       const r = c.getBoundingClientRect();
+      css = { w: Math.max(1, r.width), h: Math.max(1, r.height) };
       c.width = Math.round(r.width * dpr);
       c.height = Math.round(r.height * dpr);
+      drawn = "";
     };
     resize();
     const ro = new ResizeObserver(resize);
     ro.observe(c);
+    // Text is drawn in the page's font, which may arrive after the first frame.
+    void document.fonts?.ready.then(() => (drawn = ""));
 
+    // Draw only when something on the plan moved: the shot, the view, the previs clock, the size or
+    // the language. A still plan costs nothing.
     const tick = () => {
       raf = requestAnimationFrame(tick);
-      const dpr = c.width / Math.max(1, c.getBoundingClientRect().width);
+      const st = state.current;
+      const view = viewRef.current;
+      const key = `${previsFrame(st.path.frames)}:${c.width}:${c.height}:${useLocale.getState().locale}`;
+      if (key === drawn && shown[0] === st && shown[1] === view) return;
+      drawn = key;
+      shown = [st, view];
+      const dpr = c.width / css.w;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      drawPlan(ctx, c.width / dpr, c.height / dpr, state.current, viewRef.current);
+      drawPlan(ctx, c.width / dpr, c.height / dpr, st, view);
     };
     raf = requestAnimationFrame(tick);
     return () => {

@@ -145,6 +145,23 @@ export function useT(): T {
 export const intlLocale = () =>
   ({ en: "en", ja: "ja-JP", "zh-Hant": "zh-TW", "zh-Hans": "zh-CN", ko: "ko-KR", es: "es", pt: "pt-BR", fr: "fr-FR", ru: "ru-RU", th: "th-TH", vi: "vi-VN" })[useLocale.getState().locale];
 
+// Making an Intl formatter takes a fraction of a millisecond (toLocaleDateString makes one on every
+// call), which adds up in lists redrawn on every render's progress tick; so each is made once.
+const formats = new Map<string, Intl.DateTimeFormat | Intl.NumberFormat>();
+const format = <F extends Intl.DateTimeFormat | Intl.NumberFormat>(kind: string, options: object, make: (locale: string) => F): F => {
+  const locale = intlLocale();
+  const key = `${kind}:${locale}:${JSON.stringify(options)}`;
+  let f = formats.get(key) as F | undefined;
+  if (!f) formats.set(key, (f = make(locale)));
+  return f;
+};
+
+/** Dates in the current language, with a formatter made once per language and options. */
+export const dateFormat = (options: Intl.DateTimeFormatOptions) => format("date", options, (l) => new Intl.DateTimeFormat(l, options));
+
+/** Numbers in the current language, with a formatter made once per language and options. */
+export const numberFormat = (options: Intl.NumberFormatOptions) => format("number", options, (l) => new Intl.NumberFormat(l, options));
+
 /** Outside components (toasts from event handlers): the current language right now. */
 export const tr: T = (text, vars) => translate(useLocale.getState().locale, text, vars);
 

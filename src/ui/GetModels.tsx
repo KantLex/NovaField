@@ -12,7 +12,7 @@ import { MODEL_FILES, type ModelsStatus } from "@/lib/modelFiles";
 import { fail, request, toast } from "./api";
 import { Button } from "./controls";
 import { useLive, type ServerStatus } from "./state";
-import { intlLocale, tr } from "@/i18n";
+import { numberFormat, tr } from "@/i18n";
 
 const POLL_MS = 1500;
 
@@ -51,7 +51,7 @@ export const formatBytes = (n: number) => {
   let v = n;
   while (v >= 1000 && i < units.length - 1) [v, i] = [v / 1000, i + 1];
   // Gigabytes keep a decimal (17.1 GB): model files differ by tenths.
-  return `${new Intl.NumberFormat(intlLocale(), { maximumFractionDigits: (i > 1 && v < 10) || (i > 2 && v < 100) ? 1 : 0 }).format(v)} ${units[i]}`;
+  return `${numberFormat({ maximumFractionDigits: (i > 1 && v < 10) || (i > 2 && v < 100) ? 1 : 0 }).format(v)} ${units[i]}`;
 };
 
 /** What the server has and what's downloading, loaded the first time anything asks. */
