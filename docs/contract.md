@@ -233,3 +233,17 @@ A health check for a clip, without any model. An output node.
   - **blown:** more than 5% of pixels above 0.985 on average. −10.
   - **crushed:** more than 35% of pixels below 0.015 on average. −3.
 - The app flags a take for a second look when `score < 85` or any issue is `high`.
+
+## 4. Model downloads (0.5.0)
+
+Routes on the ComfyUI server, not nodes. The list of files is `comfyui-novafield/nova/model_catalog.json`
+(`{"files": {name: {"url", "folder", "size"}}}`); the app reads the same file (`src/lib/modelFiles.ts`).
+
+- `GET /novafield/models` → `{"version", "files": {name: {"folder", "size", "installed", "job"?}}}`,
+  where `job` is `{"state": "queued"|"downloading"|"done"|"failed"|"cancelled", "done", "total", "error"?}`
+  (bytes).
+- `POST /novafield/models/download`, JSON `{"files": [names]}` → `{"queued": [names]}`. Files already
+  there or on their way are left out; a name not in the list is a 400 and nothing starts.
+- `POST /novafield/models/cancel`, JSON `{"file": name}` → `{"cancelled": bool}`.
+- A non-JSON body is a 415. Older packs answer 404, and the app falls back to showing each file's link
+  and folder.

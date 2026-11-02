@@ -14,6 +14,7 @@ import type { Asset, BoxKey, Quality } from "@/lib/engines/specs";
 import { api, fail } from "@/ui/api";
 import { Locked, Section, Segmented } from "@/ui/controls";
 import { EngineSource, sourceTag } from "@/ui/cost";
+import { GetModels, useMissing, useModels } from "@/ui/GetModels";
 import { Drop } from "@/ui/Drop";
 import { NodesCallout } from "@/ui/NodesCallout";
 import { tr } from "@/i18n";
@@ -136,14 +137,7 @@ function ModelPicker({ caps }: { caps?: Capabilities }) {
       </select>
       {cutting && <p className="text-[12px] text-dim">{tr("Cutting the clip for it…")}</p>}
       {picked?.blurb && <p className="text-[12px] leading-snug text-dim">{picked.blurb}</p>}
-      {caps && current.id !== "workflow" && !henshinReady(g.mode, current.id, caps) && (
-        <Locked>
-          {/* File names are long and unbroken: let them wrap anywhere. */}
-          <span className="[overflow-wrap:anywhere]">
-            {tr("{model} is not installed on the server. It needs: {files}.", { model: current.name, files: current.files.join(", ") })}
-          </span>
-        </Locked>
-      )}
+      {caps && current.id !== "workflow" && !henshinReady(g.mode, current.id, caps) && <NotReady name={current.name} files={current.files} />}
       {recipe && (
         <>
           <p className="text-[12px] text-dim">{tr(WORKFLOW_NOTE[g.mode])}</p>
@@ -174,6 +168,28 @@ function ModelPicker({ caps }: { caps?: Capabilities }) {
       )}
     </Section>
   );
+}
+
+/**
+ * A model the server can't run yet: its missing files, to download from here; or, when the files
+ * are all there, the nodes it still lacks.
+ */
+function NotReady({ name, files }: { name: string; files: string[] }) {
+  const status = useModels((s) => s.status);
+  const missing = useMissing(files);
+  if (!status || !missing) return null;
+  if (status.cloud || !missing.length)
+    return (
+      <Locked>
+        {/* File names are long and unbroken: let them wrap anywhere. */}
+        <span className="[overflow-wrap:anywhere]">
+          {status.cloud
+            ? tr("{model} is not installed on the server. It needs: {files}.", { model: name, files: files.join(", ") })
+            : tr("{model}'s files are on your ComfyUI PC, but its nodes aren't. Update ComfyUI, then restart it.", { model: name })}
+        </span>
+      </Locked>
+    );
+  return <GetModels name={name} files={files} />;
 }
 
 /** Why the other video workflows can't run a mode: what it needs that they don't take. */

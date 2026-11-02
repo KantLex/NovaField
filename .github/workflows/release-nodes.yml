@@ -41,7 +41,7 @@ jobs:
         working-directory: app/comfyui-novafield
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pip install numpy pytest
+          pip install numpy pytest aiohttp
           pytest -q
 
       - uses: actions/checkout@v4

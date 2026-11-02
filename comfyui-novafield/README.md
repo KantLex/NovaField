@@ -36,11 +36,29 @@ The pack isn't on the Comfy Registry yet, so searching for it in Manager or inst
 
 | Version | What's new |
 |---|---|
+| 0.5.0 | Model downloads for the NovaField app: it can fetch the files its features need into this ComfyUI's model folders, with progress, resume and cancel (see below) |
 | 0.4.2 | `NovaShutter`: with the shutter closed, a frame halfway between two sub-frames now takes the later one, so frames stay evenly spaced (Python's `round()` alternated) |
 | 0.4.1 | Test fix only (the fixture check now allows last-digit float differences between platforms) |
 | 0.4.0 | `NovaMatchColor`, `NovaShutter`, `NovaShotQC` |
 | 0.3.0 | Nine more film stocks in `NovaLensFilm`, colour controls and grain size |
 | 0.2.0 | `NovaGhostRig`, `NovaLensFilm`, `NovaBoxTrackMask`, `NovaContactSheet` |
+
+## Model downloads (0.5.0)
+
+The pack adds three routes to the ComfyUI server so the NovaField app can download the model files
+its features need straight onto this PC (Settings → Models in the app):
+
+| Route | Does |
+|---|---|
+| `GET /novafield/models` | every file it can download: folder, size, whether it's there, download progress |
+| `POST /novafield/models/download` | `{"files": [names]}`: queue the ones not there yet |
+| `POST /novafield/models/cancel` | `{"file": name}`: stop it and delete what came so far |
+
+Only the files in `nova/model_catalog.json` can be downloaded, each from its Hugging Face link into
+its folder there: a request names a file, never a URL or a path. Files download one at a time to
+`<name>.novafield-part` and are renamed when complete; a part left by a failed try is resumed.
+Bodies must be JSON, so a web page elsewhere can't start a download with a plain form. Anyone who
+can reach your ComfyUI can start these downloads, as they can queue renders.
 
 ## Nodes
 

@@ -259,6 +259,12 @@ Wan のモデルは音を作らないので、「新しい音」は H3 でだけ
 
 拡張子はすべて `.safetensors` です。足りないものがあっても、それを必要とする機能がロックされるだけです。
 
+**入手方法。** `comfyui-novafield/nova/model_catalog.json` に上のファイルすべての Hugging Face のリンク、フォルダ、サイズがあり、ノードパックとアプリ（`src/lib/modelFiles.ts`）が同じファイルを読みます。
+サーバーにあるものは ComfyUI 自身のローダーの一覧から分かるので（`src/server/models.ts` の `filesOnServer`）、パックがなくても判断できます。
+ダウンロードはパックのルート（0.5.0、[contract.md](contract.md#4-model-downloads-050)）経由で、ComfyUI の PC 上で 1 ファイルずつ行われ、再開もキャンセルもでき、一覧にあるファイルだけが対象です。
+`GET /api/models` が両方をまとめ、`POST /api/models` と `/api/models/cancel` は要求をそのまま渡します。ファイルが届くとサーバーは ComfyUI の一覧を読み直すので、機能のロックが外れます。
+`MODEL_SETS`（`src/lib/modelSets.ts`）は設定 → モデル用にファイルを機能ごとにまとめ、変身のモデル選択は選んだモデルのファイルを提示します。
+
 ## 実行・テスト・チェック
 
 ```bash

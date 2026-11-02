@@ -243,6 +243,12 @@ H3 最長 15 秒，Wan 為 16 fps 的 81 格，兩者都至少 2.4 秒。
 
 全部都是 `.safetensors`。缺少任何一個，只會鎖住需要它的功能。
 
+**取得方式。** `comfyui-novafield/nova/model_catalog.json` 列出上面每個檔案的 Hugging Face 連結、資料夾與大小；節點包與應用程式（`src/lib/modelFiles.ts`）讀的是同一個檔案。
+伺服器上有哪些檔案，從 ComfyUI 自己的載入器清單就能得知（`src/server/models.ts` 的 `filesOnServer`），不需要節點包。
+下載透過節點包的路由（0.5.0，[contract.md](contract.md#4-model-downloads-050)）在 ComfyUI 電腦上一次一個進行，可續傳、可取消，且只限清單內的檔案。
+`GET /api/models` 合併兩者，`POST /api/models` 與 `/api/models/cancel` 轉送請求。檔案下載完成後，伺服器會重新讀取 ComfyUI 的清單，功能就會解鎖。
+`MODEL_SETS`（`src/lib/modelSets.ts`）依功能把檔案分組，供設定 → 模型使用；變身的模型選單則提供所選模型的檔案。
+
 ## 執行、測試與檢查
 
 ```bash

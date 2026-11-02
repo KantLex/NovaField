@@ -15,6 +15,7 @@ const DATA_FILES = [
   "src/lib/engines/specs.ts",
   "src/lib/engines/sizing.ts",
   "src/lib/engines/henshinModels.ts",
+  "src/lib/modelSets.ts",
 ];
 // Shown in the template browser; they come from ComfyUI's own template index.
 const EXTRA = ["Image", "Image Tools", "Video", "Video Tools", "Audio", "3D Model", "Vector", "LLM", "Node Basics", "Product & Ads", "Character & Fashion", "Brand & Design", "Foundation", "Applied", "Box"];

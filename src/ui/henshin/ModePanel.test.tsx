@@ -5,6 +5,9 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FULL_CAPS } from "@/server/runner";
 import { ModePanel, retime } from "./ModePanel";
+import { MODELS } from "@/lib/engines/capabilities";
+import { MODEL_FILES } from "@/lib/modelFiles";
+import { useModels } from "@/ui/GetModels";
 import { useRecipes } from "@/ui/workflows/store";
 import { useG, type Mode } from "./state";
 
@@ -44,10 +47,14 @@ describe("Henshin's panel", () => {
     expect(useG.getState().audio).toBe("none");
   });
 
-  it("says plainly when the server can't run the chosen model, and what it needs", () => {
+  it("says plainly when the server can't run the chosen model, and offers its files", () => {
     act(() => useG.getState().set({ mode: "paths" }));
+    const files = Object.fromEntries(Object.keys(MODEL_FILES).map((f) => [f, { installed: f !== MODELS.wanI2v }]));
+    act(() => useModels.setState({ status: { cloud: false, pack: "0.5.0", files } }));
     render(<ModePanel caps={{ ...caps, wanMove: false }} />);
-    expect(screen.getByText(/^Wan 2\.1 \+ WanMove is not installed on the server\. It needs: wan2\.1_i2v_480p_14B_fp16\.safetensors/)).toBeTruthy();
+    expect(screen.getByText("Wan 2.1 + WanMove needs these files on your ComfyUI PC.")).toBeTruthy();
+    expect(screen.getByText(MODELS.wanI2v)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Download 32\.8 GB/ })).toBeTruthy();
     expect(screen.getByRole("option", { name: "Wan 2.1 + WanMove · Not installed" })).toBeTruthy();
   });
 

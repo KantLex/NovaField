@@ -399,8 +399,11 @@ rename it.
 
 ## Which models unlock what
 
-Put the files in the usual ComfyUI model folders. Anything missing only locks the feature that
-needs it.
+**Settings → Models** shows what each feature needs and what your ComfyUI PC is missing, and
+downloads it there with one click (it needs the NovaField nodes 0.5.0 or later; with older nodes it
+lists each file's link and the folder it goes in). A model you choose in Henshin that isn't there
+offers the same download. Or put the files in the usual ComfyUI model folders yourself. Anything
+missing only locks the feature that needs it.
 
 | Feature | What the server needs |
 |---|---|

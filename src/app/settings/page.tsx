@@ -7,7 +7,9 @@ import { useEffect, useState } from "react";
 import type { StorageInfo } from "@/server/storage";
 import { Button } from "@/ui/controls";
 import { fail, request, toast } from "@/ui/api";
-import { intlLocale, tr } from "@/i18n";
+import { formatBytes } from "@/ui/GetModels";
+import { ModelsPanel } from "@/ui/ModelsPanel";
+import { tr } from "@/i18n";
 
 const KINDS = [
   { id: "media", label: "Takes", tone: "bg-tungsten" },
@@ -17,14 +19,6 @@ const KINDS = [
 ] as const;
 
 const field = "h-9 w-full min-w-0 rounded-md bg-raised px-3 text-[13px] placeholder:text-faint focus:outline-none focus:ring-1 focus:ring-tungsten/60";
-
-function formatBytes(n: number) {
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let i = 0;
-  let v = n;
-  while (v >= 1000 && i < units.length - 1) [v, i] = [v / 1000, i + 1];
-  return `${new Intl.NumberFormat(intlLocale(), { maximumFractionDigits: v < 10 && i > 1 ? 1 : 0 }).format(v)} ${units[i]}`;
-}
 
 export default function SettingsPage() {
   const [info, setInfo] = useState<StorageInfo | null>(null);
@@ -72,7 +66,7 @@ export default function SettingsPage() {
     <div className="mx-auto flex w-full max-w-[880px] flex-col gap-5 px-4 py-6 sm:px-6">
       <div>
         <h1 className="display text-[30px] leading-tight">{tr("Settings")}</h1>
-        <p className="max-w-[64ch] text-[13px] text-dim">{tr("Where NovaField keeps your work, and where it renders.")}</p>
+        <p className="max-w-[64ch] text-[13px] text-dim">{tr("Where NovaField keeps your work, the models it needs, and where it renders.")}</p>
       </div>
 
       <section className="flex flex-col gap-4 rounded-md bg-panel p-4" aria-labelledby="storage">
@@ -169,6 +163,8 @@ export default function SettingsPage() {
           </>
         )}
       </section>
+
+      <ModelsPanel />
 
       <Link href="/connection" className="flex items-center gap-3 rounded-md bg-panel p-4 hover:bg-raised">
         <span className="min-w-0 flex-1">

@@ -13,7 +13,7 @@ PACK="$ROOT/comfyui-novafield"
 VERSION="$(python3 -c "import tomllib;print(tomllib.load(open('$PACK/pyproject.toml','rb'))['project']['version'])")"
 
 echo "Testing the pack (v$VERSION)…"
-(cd "$PACK" && uv run --python 3.12 --with torch --with numpy --with pytest pytest -q)
+(cd "$PACK" && uv run --python 3.12 --with torch --with numpy --with pytest --with aiohttp pytest -q)
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT

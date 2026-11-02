@@ -296,6 +296,16 @@ The file names the app looks for (`src/lib/engines/capabilities.ts`):
 
 All are `.safetensors`. Anything missing locks only the feature that needs it.
 
+**Getting them.** `comfyui-novafield/nova/model_catalog.json` lists every file above with its
+Hugging Face link, folder and size; the pack and the app (`src/lib/modelFiles.ts`) read the same
+file. What the server has comes from ComfyUI's own loader lists (`filesOnServer` in
+`src/server/models.ts`), so it's known without the pack. Downloads go through the pack's routes
+(0.5.0, [contract.md](contract.md#4-model-downloads-050)): one file at a time on the ComfyUI PC,
+resumable, cancellable, only files in the list. `GET /api/models` merges the two; `POST /api/models`
+and `/api/models/cancel` pass requests on. When a file arrives, the server reads ComfyUI's lists
+again so the feature unlocks. `MODEL_SETS` (`src/lib/modelSets.ts`) groups the files by what they
+unlock for Settings → Models; the Henshin picker offers the files of the chosen model.
+
 ## Running, testing and checking
 
 ```bash
