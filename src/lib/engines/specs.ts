@@ -1,7 +1,7 @@
 // What the UI asks for. Engines compile these into ComfyUI graphs.
 
 import type { Angle, Lens, MoveLayer, ShotSize } from "../cinema/moves";
-import type { FilmLook } from "../cinema/looks";
+import type { FilmLook, LightFrom } from "../cinema/looks";
 import type { CustomRig, Timing } from "../cinema/custom";
 import type { InputValue } from "../comfy/graph";
 
@@ -96,6 +96,8 @@ export interface ShotSpec {
   /** The 3D previs set drawn through the shot's camera by the app: H3's guide in place of the ghost rig. */
   guide?: Asset | null;
   lighting: string;
+  /** Where the key light comes from (missing: any side). */
+  lightFrom?: LightFrom;
   film: FilmLab;
   /** Apply the film lab on the GPU (needs the NovaField pack); otherwise only the prompt mentions the stock. */
   filmOnGpu: boolean;

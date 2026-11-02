@@ -27,6 +27,11 @@ describe("set pieces in words", () => {
     expect(text).toBe("On the set: a table in the foreground, at frame left; a car behind the subject, at frame right; and the red armchair behind the subject, in the middle of the frame.");
   });
 
+  it("uses a set piece's own name over its kind", () => {
+    const text = describeSet(path({ props: [{ label: "Table", name: "weathered wooden picnic table", at: [0, -2], size: [1.6, 0.75, 0.9] }] }));
+    expect(text).toBe("On the set: the weathered wooden picnic table behind the subject, in the middle of the frame.");
+  });
+
   it("says nothing without set pieces", () => {
     expect(describeSet(path({}))).toBe("");
   });
@@ -43,5 +48,16 @@ describe("stand-ins facing each other", () => {
       }),
     );
     expect(text).toBe("The main subject talks, gesturing with their hands, facing the second person. The second person stands facing the main subject.");
+  });
+});
+
+describe("what a walker does on arrival", () => {
+  const walker = (extra: object) => describeBlocking(path({ actors: [{ from: [-2, 0], to: [0, 0], height: 1.75, ...extra }] }));
+  it("follows the walk with it", () => {
+    expect(walker({ end: 0.5, then: "wave" })).toBe("The main subject walks across the frame from left to right in the first half of the shot, then waves.");
+    expect(walker({ start: 0.4, end: 0.5, then: "sit" })).toBe("The main subject walks across the frame from left to right halfway through the shot, then sits.");
+  });
+  it("says nothing of it when the walk takes the whole shot", () => {
+    expect(walker({ then: "wave" })).toBe("The main subject walks across the frame from left to right.");
   });
 });

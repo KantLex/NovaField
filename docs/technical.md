@@ -66,6 +66,16 @@ then says "facing the second person". The plan's Framing menu (`src/ui/studio/fr
 mark A on a classic framing of the stand-ins (a wide, a two-shot, a medium shot, a close-up or an
 over-the-shoulder) with the lens for it, keeps the camera on its side of the line between two
 people, and moves the other marks by as much, so the rest of the move is kept.
+A walking stand-in can also have a `then` (app-only, like `action`): what it does once it arrives,
+played by its figure and said in the prompt ("walks toward the camera, then waves"). With two or
+more stand-ins, both plans draw the line of action through the first two. `lightFrom` on the shot
+says which side the key light comes from: the prompt adds it to the Light preset ("key light from
+frame left"), and the 3D set is lit from that side, as the opening camera sees it.
+A set piece can also have a `name` (app-only), what it really is in the user's words. The plan
+shows it, and the prompt uses it in place of the kind ("the weathered wooden picnic table behind
+the subject"). The kind (`label`) still picks the 3D shape. Tests on a real H3 render showed why: the
+guide decides where things are and how they move, but H3 copies a plain shape's look unless the
+words say what it is.
 
 The 3D set is also the default guide (`rigStyle: "set3d"`). The monitor's lens view draws it
 through the shot's camera (`src/ui/three/lensRender.ts`). The camera-move tiles show each

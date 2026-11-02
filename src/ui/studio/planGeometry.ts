@@ -116,6 +116,29 @@ export function turnToward(a: Actor, x: number, z: number): number {
   return r === -180 ? 180 : r;
 }
 
+/** How far the line of action runs past the two people, each way, in metres. */
+const LINE_REACH = 9;
+
+/**
+ * The line of action (the 180° line) through stand-ins 1 and 2 where they start, run out across the
+ * set: a camera kept on one side of it keeps them on the same sides of the frame from shot to shot.
+ * Null with fewer than two people, or two on the same spot.
+ */
+export function lineOfAction(p: CameraPath): [[number, number], [number, number]] | null {
+  const [a, b] = p.actors ?? [];
+  if (!a || !b) return null;
+  const dx = b.from[0] - a.from[0];
+  const dz = b.from[1] - a.from[1];
+  const l = Math.hypot(dx, dz);
+  if (l < 0.3) return null;
+  const ux = dx / l;
+  const uz = dz / l;
+  return [
+    [a.from[0] - ux * LINE_REACH, a.from[1] - uz * LINE_REACH],
+    [b.from[0] + ux * LINE_REACH, b.from[1] + uz * LINE_REACH],
+  ];
+}
+
 /** True when two turns (degrees) point the same way: 180 and -180 alike. */
 export const sameTurn = (a: number, b: number) => Math.abs(((((a - b) % 360) + 540) % 360) - 180) < 0.5;
 

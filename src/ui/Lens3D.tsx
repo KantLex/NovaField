@@ -6,14 +6,18 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { CameraPath } from "@/lib/cinema/camera";
+import { lightFromOf } from "@/lib/cinema/looks";
 import { RigView } from "./RigView";
+import { useStudio } from "./state";
 
 export function Lens3D({ path, onFrame, className }: { path: CameraPath; onFrame?: (frame: number) => void; className?: string }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [failed, setFailed] = useState(false);
-  const latest = useRef({ path, onFrame });
+  // The studio shot's key light, as the Director panel sets it.
+  const light = useStudio((s) => lightFromOf(s.shot));
+  const latest = useRef({ path, onFrame, light });
   useEffect(() => {
-    latest.current = { path, onFrame };
+    latest.current = { path, onFrame, light };
   });
 
   useEffect(() => {
@@ -27,6 +31,7 @@ export function Lens3D({ path, onFrame, className }: { path: CameraPath; onFrame
           canvas.current!,
           () => latest.current.path,
           (f) => latest.current.onFrame?.(f),
+          () => latest.current.light,
         );
       })
       .catch(() => alive && setFailed(true));

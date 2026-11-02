@@ -55,6 +55,20 @@ export const LOOKS: FilmLook[] = [
   { id: "super8", label: "Super 8", note: "Warm home movie with a wobbling gate", prompt: "Super 8 home movie footage, warm faded colour", swatch: ["#24180e", "#b27a45", "#f3dcb0"], grain: 0.7, halation: 0.2, vignette: 0.45, gateWeave: 0.5, since: "0.3" },
 ];
 
+/** Where the key light comes from, as the opening camera sees it. The 3D set is lit the same way. */
+export const LIGHT_FROM = [
+  { id: "auto", label: "Any side", prompt: "" },
+  { id: "left", label: "Frame left", prompt: "key light from frame left" },
+  { id: "right", label: "Frame right", prompt: "key light from frame right" },
+  { id: "front", label: "Front", prompt: "lit from the front, from behind the camera" },
+  { id: "back", label: "Behind", prompt: "backlit, the key light behind the subject, rim light on the edges" },
+  { id: "top", label: "Above", prompt: "hard top light from directly above" },
+] as const;
+export type LightFrom = (typeof LIGHT_FROM)[number]["id"];
+
+/** The side the shot's key light comes from; any side while the Light section is off. */
+export const lightFromOf = (s: { lightFrom?: LightFrom; off?: { light?: boolean } }): LightFrom => (s.off?.light ? "auto" : (s.lightFrom ?? "auto"));
+
 export interface Lighting {
   id: string;
   label: string;

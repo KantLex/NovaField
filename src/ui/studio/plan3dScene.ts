@@ -8,9 +8,10 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { basis, poseAt, propCorners, type CameraPath, type Vec3 } from "@/lib/cinema/camera";
 import { ACTOR_COLORS, walks } from "@/lib/cinema/custom";
+import type { LightFrom } from "@/lib/cinema/looks";
 import { previsFrame } from "../previs";
 import { aimLens, previsSet } from "../three/previsSet";
-import { facePoint, handles, HEIGHTS, inProp, keyLabel, rayToHeight, rayToLevel, TUNGSTEN, type Handle } from "./planGeometry";
+import { facePoint, handles, HEIGHTS, inProp, keyLabel, lineOfAction, rayToHeight, rayToLevel, TUNGSTEN, type Handle } from "./planGeometry";
 
 export interface Plan3DState {
   /** The shot as it plays. */
@@ -20,6 +21,8 @@ export interface Plan3DState {
   sel: Handle | null;
   aspect: number;
   inset: boolean;
+  /** Which side the key light comes from. */
+  light: LightFrom;
 }
 
 export interface Plan3DHooks {
@@ -64,6 +67,7 @@ export function createPlan3D(canvas: HTMLCanvasElement, labelLayer: HTMLElement,
     picked: own(new THREE.MeshBasicMaterial({ color: 0xffffff })),
     stalk: own(new THREE.LineDashedMaterial({ color: TUNGSTEN, dashSize: 0.08, gapSize: 0.06, transparent: true, opacity: 0.6 })),
     sight: own(new THREE.LineBasicMaterial({ color: 0xf4f4ec, transparent: true, opacity: 0.35 })),
+    axis: own(new THREE.LineDashedMaterial({ color: 0xff785a, dashSize: 0.3, gapSize: 0.22, transparent: true, opacity: 0.6 })),
     body: own(new THREE.MeshStandardMaterial({ color: 0x2a2a28, roughness: 0.5, metalness: 0.3 })),
     frustum: own(new THREE.LineBasicMaterial({ color: TUNGSTEN, transparent: true, opacity: 0.8 })),
   };
@@ -170,6 +174,14 @@ export function createPlan3D(canvas: HTMLCanvasElement, labelLayer: HTMLElement,
       }
     });
 
+    // The line of action between the first two people, on the floor.
+    const axis = lineOfAction(path);
+    if (axis) {
+      const line = new THREE.Line(tmp(new THREE.BufferGeometry().setFromPoints(axis.map(([x, z]) => new THREE.Vector3(x, 0.012, z)))), mat.axis);
+      line.computeLineDistances();
+      edit.add(line);
+    }
+
     onGizmo(edit);
 
     // Mark labels, as on the floor plan.
@@ -248,6 +260,7 @@ export function createPlan3D(canvas: HTMLCanvasElement, labelLayer: HTMLElement,
     const s = read();
     if (!last || s.path !== last.path || s.editable !== last.editable || s.sel !== last.sel) rebuild(s);
     last = s;
+    set.light(s.light);
     set.sync(s.path, s.sel?.kind === "prop" ? s.sel.i : null);
     controls.update();
     const frame = previsFrame(s.path.frames);

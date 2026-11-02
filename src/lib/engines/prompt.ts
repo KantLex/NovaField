@@ -1,7 +1,7 @@
 // Turns the director's panel into the prose MiniMax H3 reads.
 
 import { ANGLES, describeLayers, LENSES, MOVES, SHOT_SIZES, lensPrompt } from "../cinema/moves";
-import { LIGHTING, LOOKS } from "../cinema/looks";
+import { LIGHT_FROM, LIGHTING, LOOKS } from "../cinema/looks";
 import type { CameraPath } from "../cinema/camera";
 import { describeBlocking, describePath } from "../cinema/custom";
 import type { Asset, ShotSpec } from "./specs";
@@ -47,7 +47,8 @@ export function composeShotPrompt(
   const angle = ANGLES.find((a) => a.id === spec.angle)!;
   const move = MOVES.find((m) => m.id === spec.move) ?? MOVES[0];
   const lens = LENSES.includes(spec.lens) ? lensPrompt[spec.lens] : "";
-  const light = LIGHTING.find((l) => l.id === spec.lighting)?.prompt ?? "";
+  // The mood's light, then which side it comes from.
+  const light = [LIGHTING.find((l) => l.id === spec.lighting)?.prompt, LIGHT_FROM.find((l) => l.id === spec.lightFrom)?.prompt].filter(Boolean).join(", ");
   const look = LOOKS.find((l) => l.id === spec.film.look);
 
   const parts: string[] = [];
@@ -95,8 +96,8 @@ export function composeShotPrompt(
     const people = opts.path?.actors?.length ?? 0;
     parts.push(
       `Match the camera path of ${v} exactly: its position, direction, speed and timing.${
-        people > 1 || (spec.rig && describeBlocking(opts.path!)) ? ` The people are placed, face and move exactly like the block figures in ${v}.` : ""
-      }${opts.path && !opts.path.actors ? ` Its block figure only marks where the subject is; it is not a person unless the script has one.` : ""}${opts.path?.props?.length ? ` The furniture and objects stand where its plain shapes stand, as real things.` : ""} ${v} is only a rough 3D blockout; never show its grid, block figures, plain shapes or colours, and never copy its look.`,
+        people > 1 || (spec.rig && describeBlocking(opts.path!)) ? ` The people are placed, face and move like the block figures in ${v}; the figures' poses are rough, so keep their bodies and gestures natural.` : ""
+      }${opts.path && !opts.path.actors ? ` Its block figure only marks where the subject is; it is not a person unless the script has one.` : ""}${opts.path?.props?.length ? ` Its plain shapes only mark where furniture and objects stand and how big they are; give each its own real materials, colours and form.` : ""} ${v} is only a rough 3D blockout; never show its grid, block figures, plain shapes or colours, and never copy its look.`,
     );
   }
   if (opts.rigVideoIndex) {

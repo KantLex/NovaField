@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { Download, Grid3x3, LoaderCircle, Pause, Play, Repeat, SkipBack, SkipForward } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ease, linearTimeFor, type CameraPath } from "@/lib/cinema/camera";
+import { lightFromOf } from "@/lib/cinema/looks";
 import { speedCurve } from "@/lib/cinema/metrics";
 import { MOVES, type MoveLayer } from "@/lib/cinema/moves";
 import { timecode } from "@/lib/engines/sizing";
@@ -12,6 +13,7 @@ import { Menu, MenuItem } from "./Menu";
 import { previsFrame, usePrevis } from "./previs";
 import { download, recordPrevis } from "./previsExport";
 import type { RigStyle } from "./rig";
+import { useStudio } from "./state";
 import { tr } from "@/i18n";
 
 const WINDOW: Record<MoveLayer["when"], [number, number]> = { whole: [0, 1], start: [0, 0.5], end: [0.5, 1] };
@@ -87,7 +89,7 @@ export function PrevisTimeline({
   const save = async () => {
     setSaving(0);
     try {
-      const blob = await recordPrevis(path, style, ratio, label, (p) => setSaving(p));
+      const blob = await recordPrevis(path, style, ratio, label, (p) => setSaving(p), lightFromOf(useStudio.getState().shot));
       download(blob, `previs-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "shot"}`);
       toast("Previs saved to your downloads.", "done");
     } catch (e) {

@@ -326,19 +326,25 @@ export function PlanEditor({
           </ToolButton>
         )}
         <ToolButton
-          onClick={() =>
+          onClick={() => {
+            onGrab();
             onEdit((r) =>
               r.actors.length >= 3
                 ? r
                 : { ...r, actors: [...r.actors, { from: [r.actors.length === 1 ? 1.4 : -1.4, 0.4], to: [r.actors.length === 1 ? 1.4 : -1.4, 0.4], height: 1.75 }] },
-            )
-          }
+            );
+          }}
           disabled={(path.actors?.length ?? 1) >= 3}
           title={tr("Add a stand-in person")}
         >
           <UserPlus size={13} /> {tr("Stand-in")}
         </ToolButton>
-        <ToolButton onClick={() => onEdit(addPoint)} disabled={editable.keys.length >= 6} title={tr("Add a camera point to bend the path")}>
+        <ToolButton
+          onClick={() => {
+            onGrab();
+            onEdit(addPoint);
+          }}
+          disabled={editable.keys.length >= 6} title={tr("Add a camera point to bend the path")}>
           <Plus size={13} /> {tr("Point")}
         </ToolButton>
         <Menu

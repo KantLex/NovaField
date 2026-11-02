@@ -122,8 +122,8 @@ describe("the path the node gets", () => {
       fps: 24,
       ease: "linear",
       keys: [{ t: 0, pos: [0, 1.5, 4], target: [0, 1.4, 0], fov: 40, roll: 0 }],
-      actors: [{ from: [0, 0], to: [1, 0], height: 1.7, model: "/api/files/media/a.glb", turn: 90, action: "run" }],
-      props: [{ at: [0, -2], size: [1, 1, 1], label: "Car", model: "/api/files/media/car.glb" }],
+      actors: [{ from: [0, 0], to: [1, 0], height: 1.7, model: "/api/files/media/a.glb", turn: 90, action: "run", then: "wave" }],
+      props: [{ at: [0, -2], size: [1, 1, 1], label: "Car", name: "red vintage convertible", model: "/api/files/media/car.glb" }],
     };
     const sent = forNode(path);
     expect(JSON.stringify(sent)).not.toContain("/api/files");

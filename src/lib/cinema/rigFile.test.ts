@@ -80,14 +80,20 @@ describe("camera path files", () => {
     const r = parseRigFile(
       JSON.stringify({
         keys: [{ pos: [0, 1, 5], target: [0, 1, 0] }],
-        actors: [{ from: [0, 0], model: "/api/files/media/abc.glb", turn: 270, action: "wave" }, { from: [1, 0], model: "https://example.com/x.glb", action: "fly" }],
-        props: [{ at: [0, -2], model: "/api/files/media/car.glb" }, { at: [2, -2], model: "/api/files/../../etc/passwd" }],
+        actors: [{ from: [0, 0], model: "/api/files/media/abc.glb", turn: 270, action: "wave" }, { from: [1, 0], to: [3, 0], model: "https://example.com/x.glb", action: "fly", then: "sit" }, { from: [2, 0], then: "run" }],
+        props: [{ at: [0, -2], model: "/api/files/media/car.glb", name: "  red vintage convertible  " }, { at: [2, -2], model: "/api/files/../../etc/passwd", name: "   " }],
       }),
     );
     if ("error" in r) throw new Error(r.error);
-    expect(r.rig.actors.map((a) => a.model)).toEqual(["/api/files/media/abc.glb", undefined]);
-    // Facing wraps into -180..180; only known motions are kept.
-    expect(r.rig.actors.map((a) => [a.turn, a.action])).toEqual([[-90, "wave"], [undefined, undefined]]);
+    expect(r.rig.actors.map((a) => a.model)).toEqual(["/api/files/media/abc.glb", undefined, undefined]);
+    // Facing wraps into -180..180; only known motions are kept, and only an on-the-spot one after a walk.
+    expect(r.rig.actors.map((a) => [a.turn, a.action, a.then])).toEqual([
+      [-90, "wave", undefined],
+      [undefined, undefined, "sit"],
+      [undefined, undefined, undefined],
+    ]);
     expect(r.rig.props!.map((p) => p.model)).toEqual(["/api/files/media/car.glb", undefined]);
+    // A set piece's own name is trimmed; a blank one is dropped.
+    expect(r.rig.props!.map((p) => p.name)).toEqual(["red vintage convertible", undefined]);
   });
 });

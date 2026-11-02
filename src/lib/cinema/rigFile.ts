@@ -131,6 +131,7 @@ function readRig(data: unknown): RigFile {
         ...model(a.model),
         ...(typeof a.turn === "number" && Number.isFinite(a.turn) ? { turn: ((((a.turn + 180) % 360) + 360) % 360) - 180 } : {}),
         ...((STAND_MOTIONS as readonly unknown[]).includes(a.action) || (GAITS as readonly unknown[]).includes(a.action) ? { action: a.action as Actor["action"] } : {}),
+        ...((STAND_MOTIONS as readonly unknown[]).includes(a.then) ? { then: a.then as Actor["then"] } : {}),
       });
     });
   }
@@ -154,6 +155,7 @@ function readRig(data: unknown): RigFile {
         size: p.size === undefined ? [1, 1, 1] : (vec(p.size, 3, `${what}: size`).map((v) => Math.max(0.05, v)) as Vec3),
         ...(p.rot !== undefined ? { rot: num(p.rot, `${what}: rot`) } : {}),
         ...(typeof p.label === "string" ? { label: p.label.slice(0, 40) } : {}),
+        ...(typeof p.name === "string" && p.name.trim() ? { name: p.name.trim().slice(0, 60) } : {}),
         ...model(p.model),
       });
     });

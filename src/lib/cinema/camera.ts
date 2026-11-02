@@ -26,21 +26,26 @@ export interface Actor {
   turn?: number;
   /** What it does: on the spot, or how it covers ground when it walks. App-only, for the 3D plan and the prompt. */
   action?: Motion;
+  /** What a walker does once it arrives (waves, sits…), for the rest of the shot. App-only, like `action`. */
+  then?: StandMotion;
 }
 
 /** What a stand-in does on the spot. */
 export const STAND_MOTIONS = ["idle", "wave", "talk", "point", "look", "sit", "jump", "dance"] as const;
 /** How a stand-in covers ground between its marks. */
 export const GAITS = ["walk", "run"] as const;
-export type Motion = (typeof STAND_MOTIONS)[number] | (typeof GAITS)[number];
+export type StandMotion = (typeof STAND_MOTIONS)[number];
+export type Motion = StandMotion | (typeof GAITS)[number];
 
 /** A set piece (contract §1c): a box on the floor. `size` is [width, height, depth] in metres, `rot` degrees about Y. */
 export interface Prop {
   at: [number, number];
   size: Vec3;
   rot?: number;
-  /** For people, not the node: "Table", "Wall"… */
+  /** For people, not the node: "Table", "Wall"… Also picks its shape in the app's 3D set. */
   label?: string;
+  /** What it really is, in the user's words ("weathered wooden picnic table"), for the plan and the prompt. App-only. */
+  name?: string;
   /** A 3D take shown in this box's place in the app's 3D plan, scaled to fill it. App-only: the node draws the box. */
   model?: string;
 }
@@ -66,13 +71,15 @@ export interface CameraPath {
 /** True for a file this app serves (a take's model), the only kind the 3D plan will load. */
 export const isAppFile = (url: string) => /^\/api\/files\/[\w./-]+$/.test(url) && !url.includes("..");
 
-/** The path as the node gets it: without the app-only fields (3D models, facing, motions), which mean nothing on the GPU server. */
+/** The path as the node gets it: without the app-only fields (3D models, facing, motions, what a walker does on arrival), which mean nothing on the GPU server. */
 export function forNode(path: CameraPath): CameraPath {
   const strip = <T extends object>(x: T): T => {
     const y = { ...x } as Record<string, unknown>;
     delete y.model;
     delete y.turn;
     delete y.action;
+    delete y.then;
+    delete y.name;
     return y as T;
   };
   return {

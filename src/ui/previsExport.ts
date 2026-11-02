@@ -1,6 +1,7 @@
 "use client";
 
 import type { CameraPath } from "@/lib/cinema/camera";
+import type { LightFrom } from "@/lib/cinema/looks";
 import { readoutAt } from "@/lib/cinema/metrics";
 import { timecode } from "@/lib/engines/sizing";
 import { drawFrame, type RigStyle } from "./rig";
@@ -11,14 +12,14 @@ const pickType = () => ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video
  * Records the previs as a video file, in real time: the move (the 3D set through the lens, or the
  * wireframe) with frame lines, a burnt-in timecode and the lens, for sharing a shot before it's rendered.
  */
-export async function recordPrevis(path: CameraPath, style: RigStyle, ratio: number, label: string, onProgress?: (pct: number) => void): Promise<Blob> {
+export async function recordPrevis(path: CameraPath, style: RigStyle, ratio: number, label: string, onProgress?: (pct: number) => void, light: LightFrom = "auto"): Promise<Blob> {
   const w = 1280;
   const h = Math.round(w / ratio / 2) * 2;
   const canvas = document.createElement("canvas");
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext("2d")!;
-  const lens = style === "set3d" ? await (await import("./three/lensRender")).lensPainter(path, w, h) : null;
+  const lens = style === "set3d" ? await (await import("./three/lensRender")).lensPainter(path, w, h, light) : null;
   // The 3D painter holds a WebGL context: give it back however the recording ends.
   try {
     const type = pickType();

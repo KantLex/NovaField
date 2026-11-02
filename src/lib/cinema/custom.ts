@@ -172,8 +172,9 @@ export function describeSet(path: CameraPath): string {
   const halfWidth = Math.tan(((pose.fov * Math.PI) / 180) / 2) * (16 / 9);
   const where: string[] = [];
   for (const p of props) {
-    // A 3D take's set piece is named after the take.
-    const name = p.label ? (setPiece(p.label)?.words ?? `the ${p.label.trim().toLowerCase()}`) : "";
+    // Named in the plan, it's what the user called it; else by its kind (a 3D take's set piece is named after the take).
+    const own = p.name?.trim();
+    const name = own ? `the ${own}` : p.label ? (setPiece(p.label)?.words ?? `the ${p.label.trim().toLowerCase()}`) : "";
     if (!name) continue;
     const { side, depth } = inCam(p.at[0], p.at[1]);
     // Behind the opening camera: it may swing into view, but there is nothing to say about framing.
@@ -213,7 +214,7 @@ export function describeBlocking(path: CameraPath): string {
         : depth > 0
           ? `${verb} away from the camera`
           : `${verb} toward the camera`;
-    lines.push(`${names[i]} ${dir}${walkWhen(a.start ?? 0, a.end ?? 1)}.`);
+    lines.push(`${names[i]} ${dir}${arrival(walkWhen(a.start ?? 0, a.end ?? 1), a)}.`);
   });
   return lines.join(" ");
 }
@@ -254,6 +255,13 @@ function facingWords(a: Actor, cam: ReturnType<typeof basis>): string {
   if (toward > 0.7) return "facing the camera";
   if (toward < -0.7) return "with their back to the camera";
   return `facing frame ${side > 0 ? "right" : "left"}`;
+}
+
+/** What a walker does once it arrives, in place of just stopping: "…, then waves". Only when it arrives with time to spare. */
+function arrival(when: string, a: Actor): string {
+  const doing = a.then && a.then !== "idle" && (a.end ?? 1) < 0.9 ? STAND_WORDS[a.then] : "";
+  if (!doing) return when;
+  return when.includes("then stops") ? when.replace("then stops", `then ${doing}`) : `${when}, then ${doing}`;
 }
 
 /** "", " halfway through the shot", " in the second half of the shot"… */

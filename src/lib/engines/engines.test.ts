@@ -158,6 +158,33 @@ describe("compiled graphs validate against the home server's node list", () => {
     }
   });
 
+  it("says which side the key light comes from, after the mood's light", () => {
+    const prompt = (over: Partial<ShotSpec>) => compile(shot(over), detectCapabilities(withoutPack)).meta.prompt;
+    expect(prompt({ lighting: "golden", lightFrom: "left" })).toContain("Lighting: warm golden-hour sunlight, long shadows, key light from frame left.");
+    expect(prompt({ lighting: "natural", lightFrom: "back" })).toContain("Lighting: backlit, the key light behind the subject");
+    expect(prompt({ lighting: "natural", lightFrom: "left", off: { light: true } })).not.toContain("key light");
+  });
+
+  it("tells H3 the guide's shapes and figures are only rough markers", () => {
+    const guide = { name: "nf_guide.mp4", kind: "video" as const, url: "/api/files/uploads/g.mp4", duration: 5 };
+    const rig = {
+      keys: [
+        { t: 0, pos: [2, 1.6, 5] as [number, number, number], target: [0, 1.2, 0] as [number, number, number], fov: 40, roll: 0 },
+        { t: 1, pos: [-1, 1.5, 5] as [number, number, number], target: [0, 1.2, 0] as [number, number, number], fov: 40, roll: 0 },
+      ],
+      ease: "linear" as const,
+      actors: [
+        { from: [-1, 0] as [number, number], to: [-1, 0] as [number, number], height: 1.7, action: "talk" as const },
+        { from: [1, 0] as [number, number], to: [1, 0] as [number, number], height: 1.8 },
+      ],
+      follow: null,
+      props: [{ label: "Table", at: [0, -1.5] as [number, number], size: [1.6, 0.75, 0.9] as [number, number, number] }],
+    };
+    const { meta } = compile(shot({ cameraMode: "rig", rigStyle: "set3d", rig, guide }), detectCapabilities(withoutPack));
+    expect(meta.prompt).toMatch(/the figures' poses are rough, so keep their bodies and gestures natural/);
+    expect(meta.prompt).toMatch(/Its plain shapes only mark where furniture and objects stand and how big they are/);
+  });
+
   it("doesn't ask for the nodes when a still shot on the 3D set has no guide", () => {
     const { meta } = compile(shot({ cameraMode: "rig", rigStyle: "set3d", move: "locked" }), detectCapabilities(withoutPack));
     expect(meta.notes.join(" ")).not.toMatch(/needs the NovaField nodes/);

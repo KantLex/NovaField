@@ -5,7 +5,7 @@
 
 import { Bookmark, ChevronDown, Copy, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { GAITS, STAND_MOTIONS, type Actor, type CameraKey, type CameraPath, type Motion, type Prop, type Vec3 } from "@/lib/cinema/camera";
+import { GAITS, STAND_MOTIONS, type Actor, type CameraKey, type CameraPath, type Motion, type Prop, type StandMotion, type Vec3 } from "@/lib/cinema/camera";
 import { ACTOR_COLORS, facingOf, type CustomRig } from "@/lib/cinema/custom";
 import { fovFor, LENSES } from "@/lib/cinema/moves";
 import { toast } from "../api";
@@ -65,9 +65,25 @@ export function PlanInspector({
     const dim = (k: 0 | 1 | 2) => (v: number) => setProp((x) => ({ ...x, size: x.size.map((s, j) => (j === k ? v : s)) as Vec3 }));
     return (
       <div className={box}>
-        <span className="font-semibold" style={{ color: `rgb(${PROP_RGB})` }}>
-          {tr(pr.label ?? "Set piece")}
-        </span>
+        {/* Its own name, typed in place of the kind: it goes into the prompt, so the take shows what it really is. */}
+        <input
+          value={pr.name ?? ""}
+          placeholder={tr(pr.label ?? "Set piece")}
+          maxLength={60}
+          onFocus={onGrab}
+          onChange={(e) => {
+            const v = e.target.value;
+            setProp((x) => {
+              if (v.trim()) x.name = v;
+              else delete x.name;
+              return x;
+            });
+          }}
+          aria-label={tr("Name this set piece")}
+          title={tr("Say what it really is, like “weathered wooden picnic table”. The prompt uses it, so the take shows that, not a plain shape.")}
+          className="w-44 rounded bg-white/10 px-1.5 py-0.5 font-semibold placeholder:font-semibold placeholder:text-[rgb(214,206,184)]/80 focus:outline-none"
+          style={{ color: `rgb(${PROP_RGB})` }}
+        />
         {pr.model ? (
           // A 3D take keeps its proportions: one size, its longest side.
           <Mini
@@ -293,6 +309,28 @@ export function PlanInspector({
         <>
           <Mini label={tr("Sets off")} value={start * 100} min={0} max={95} step={5} unit="%" onStart={onGrab} onChange={(v) => setActor((x) => ({ ...x, start: v / 100, end: Math.max(x.end ?? 1, v / 100 + 0.05) }))} />
           <Mini label={tr("Arrives")} value={end * 100} min={5} max={100} step={5} unit="%" onStart={onGrab} onChange={(v) => setActor((x) => ({ ...x, end: v / 100, start: Math.min(x.start ?? 0, v / 100 - 0.05) }))} />
+          <label className="flex items-center gap-1.5" title={tr("What it does once it arrives. Arriving before the end of the shot leaves time for it.")}>
+            <span className="text-ink/60">{tr("Then")}</span>
+            <select
+              value={a.then ?? "idle"}
+              onChange={(e) => {
+                onGrab();
+                const v = e.target.value as StandMotion;
+                setActor((x) => {
+                  if (v === "idle") delete x.then;
+                  else x.then = v;
+                  return x;
+                });
+              }}
+              className="rounded bg-white/10 px-1 py-0.5 text-[13px]"
+            >
+              {STAND_MOTIONS.map((m) => (
+                <option key={m} value={m}>
+                  {tr(MOTION_LABEL[m])}
+                </option>
+              ))}
+            </select>
+          </label>
         </>
       )}
       <Check

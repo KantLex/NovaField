@@ -132,10 +132,12 @@ export function mannequin(color: string): Mannequin {
         break;
       }
       case "talk":
+        // Easy gestures below the chest, one hand then the other, the resting one relaxed at the side.
         arms.forEach(({ arm, fore }, i) => {
-          arm.rotation.x = -0.25 - 0.1 * Math.sin(t * 3 + i * 2);
-          arm.rotation.z = SIDES[i] * (0.15 + 0.1 * Math.sin(t * 4 + i));
-          fore.rotation.x = -1.15 + 0.3 * Math.sin(t * 4.5 + i * 1.7);
+          const lead = 0.5 + 0.5 * Math.sin(t * 0.8 + i * Math.PI);
+          arm.rotation.x = -0.06 - 0.14 * lead;
+          arm.rotation.z = SIDES[i] * 0.1;
+          fore.rotation.x = -0.2 - 0.5 * lead + 0.18 * lead * Math.sin(t * 4.5 + i * 1.7);
         });
         head.rotation.x = Math.sin(t * 3) * 0.06;
         head.rotation.y = Math.sin(t * 0.9) * 0.15;

@@ -5,8 +5,9 @@
 
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { actorPositions, basis, poseAt, type CameraPath, type Vec3 } from "@/lib/cinema/camera";
+import { actorPositions, basis, poseAt, walkProgress, type CameraPath, type Vec3 } from "@/lib/cinema/camera";
 import { ACTOR_COLORS, DEFAULT_ACTOR, facingOf, walks } from "@/lib/cinema/custom";
+import type { LightFrom } from "@/lib/cinema/looks";
 import { mannequin, STRIDE, type Mannequin } from "./mannequin";
 import { copyModel, fittedModel } from "./models";
 import { pieceShape } from "./setPieces";
@@ -32,6 +33,8 @@ export interface PrevisSet {
   ready: () => Promise<void>;
   /** True while a 3D take is still loading. */
   loading: () => boolean;
+  /** Which side the key light comes from, as the shot's opening camera sees it. */
+  light: (from: LightFrom) => void;
   dispose: () => void;
 }
 
@@ -68,6 +71,21 @@ export function previsSet(scene: THREE.Scene, renderer: THREE.WebGLRenderer, giz
   room.dispose();
   const key = new THREE.DirectionalLight(0xfff1dc, 1.5);
   key.position.set(4, 8, 5);
+  let lightFrom: LightFrom = "auto";
+  /** Put the key light on the chosen side of the set, as the opening camera sees it (high and to the right by default). */
+  const aimKey = (path: CameraPath) => {
+    if (lightFrom === "auto") return key.position.set(4, 8, 5);
+    const b = basis(poseAt(path, 0));
+    const flat = (v: Vec3) => {
+      const l = Math.hypot(v[0], v[2]) || 1;
+      return [v[0] / l, v[2] / l];
+    };
+    const [rx, rz] = flat(b.right);
+    const [fx, fz] = flat(b.forward);
+    // Toward the camera is -forward: side lights come a little from the front, as a key does.
+    const [x, z] = { left: [-rx - fx * 0.4, -rz - fz * 0.4], right: [rx - fx * 0.4, rz - fz * 0.4], front: [-fx, -fz], back: [fx, fz], top: [-fx * 0.15, -fz * 0.15] }[lightFrom];
+    key.position.set(x * 6, lightFrom === "top" ? 10 : 4.5, z * 6);
+  };
   scene.add(key, new THREE.HemisphereLight(0xdfe8ff, 0x1a1612, 0.6));
 
   const floor = new THREE.Mesh(own(new THREE.PlaneGeometry(24, 24)), own(new THREE.MeshStandardMaterial({ color: 0x121211, roughness: 1 })));
@@ -198,6 +216,7 @@ export function previsSet(scene: THREE.Scene, renderer: THREE.WebGLRenderer, giz
   };
 
   const place = (shot: CameraPath, frame: number) => {
+    aimKey(shot);
     const path = shot.actors ? shot : { ...shot, actors: DEFAULT_CAST };
     const now = actorPositions(path, frame);
     const before = actorPositions(path, Math.max(0, frame - 1));
@@ -211,8 +230,10 @@ export function previsSet(scene: THREE.Scene, renderer: THREE.WebGLRenderer, giz
       f.obj.rotation.y = walking ? Math.atan2(a.to[0] - a.from[0], a.to[1] - a.from[1]) : (facingOf(a, cam0) * Math.PI) / 180;
       if (f.man) {
         f.man.group.scale.setScalar(a.height / 1.75);
-        // A walker's motion is its pace (walking by default); one on the spot stands unless told otherwise.
-        const motion = walking ? (a.action && a.action in STRIDE ? a.action : "walk") : a.action && !(a.action in STRIDE) ? a.action : "idle";
+        // A walker's motion is its pace (walking by default), and once it arrives whatever it does
+        // then; one on the spot stands unless told otherwise.
+        const arrived = walking && walkProgress(frame / Math.max(1, path.frames - 1), a.start, a.end) >= 1;
+        const motion = arrived ? (a.then ?? "idle") : walking ? (a.action && a.action in STRIDE ? a.action : "walk") : a.action && !(a.action in STRIDE) ? a.action : "idle";
         const walked = Math.hypot(x - a.from[0], z - a.from[1]);
         const speed = Math.hypot(x - before[i][0], z - before[i][2]) * path.fps;
         f.man.pose(motion, frame / path.fps, (walked / (STRIDE[motion] ?? 1.3)) * Math.PI * 2, Math.min(1, speed / 0.6));
@@ -229,6 +250,9 @@ export function previsSet(scene: THREE.Scene, renderer: THREE.WebGLRenderer, giz
     place,
     ready,
     loading: () => pending.size > 0,
+    light: (from) => {
+      lightFrom = from;
+    },
     dispose: () => {
       for (const f of figures) dropFigure(f);
       pieces.forEach(dropPiece);

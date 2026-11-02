@@ -4,6 +4,7 @@
 // set through the shot's camera and the server turns the frames into the reference video H3 follows.
 
 import { isStill } from "@/lib/cinema/custom";
+import { lightFromOf } from "@/lib/cinema/looks";
 import { shotCameraPath } from "@/lib/engines/h3";
 import { ASPECTS } from "@/lib/engines/sizing";
 import type { Asset, ShotSpec } from "@/lib/engines/specs";
@@ -21,5 +22,5 @@ export async function guideFor(spec: ShotSpec, onProgress?: (pct: number) => voi
   const path = shotCameraPath(spec);
   const ratio = ASPECTS.find((a) => a.id === spec.aspect)?.ratio ?? 16 / 9;
   const { guideFrames } = await import("../three/lensRender");
-  return api.guide(await guideFrames(path, ratio, 480, onProgress), path.fps);
+  return api.guide(await guideFrames(path, ratio, 480, onProgress, lightFromOf(spec)), path.fps);
 }

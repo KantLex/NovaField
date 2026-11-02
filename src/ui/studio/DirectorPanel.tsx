@@ -5,7 +5,7 @@ import { Image as ImageIcon } from "lucide-react";
 import { useEffect, useMemo } from "react";
 import { isEngine } from "@/lib/workflows/apply";
 import { useRecipes } from "../workflows/store";
-import { LIGHTING } from "@/lib/cinema/looks";
+import { LIGHT_FROM, LIGHTING } from "@/lib/cinema/looks";
 import { TIMINGS } from "@/lib/cinema/custom";
 import { ANGLES, layerLabel, LENSES, MOVES, SHOT_SIZES } from "@/lib/cinema/moves";
 import { ASPECTS, planH3, QUALITY } from "@/lib/engines/sizing";
@@ -290,6 +290,14 @@ export function DirectorPanel() {
             </button>
           ))}
         </div>
+        <p className="text-[12px] text-faint">{tr("Key light from")}</p>
+        <Segmented
+          label={tr("Key light from")}
+          size="sm"
+          value={shot.lightFrom ?? "auto"}
+          onChange={(from) => patch({ lightFrom: from === "auto" ? undefined : from })}
+          options={LIGHT_FROM.map((l) => ({ id: l.id, label: l.label }))}
+        />
       </Section>
 
       <FilmStock filmReady={filmReady} enabled={sw("film")} />

@@ -4,7 +4,7 @@
 import { actorPositions, poseAt, propCorners, type CameraPath, type Vec3 } from "@/lib/cinema/camera";
 import { ACTOR_COLORS } from "@/lib/cinema/custom";
 import { previsFrame } from "../previs";
-import { handles, keyLabel, PILLARS, PROP_RGB, toScreen, TUNGSTEN, type Handle, type legs, type View } from "./planGeometry";
+import { handles, keyLabel, lineOfAction, PILLARS, PROP_RGB, toScreen, TUNGSTEN, type Handle, type legs, type View } from "./planGeometry";
 import { tr } from "@/i18n";
 
 export interface PlanState {
@@ -72,8 +72,30 @@ export function drawPlan(ctx: CanvasRenderingContext2D, w: number, h: number, st
     ctx.stroke();
     const M = S(pr.at[0], pr.at[1]);
     ctx.fillStyle = `rgba(${PROP_RGB},0.9)`;
-    ctx.fillText(`${tr(pr.label ?? "Box")} · ${pr.size[1].toFixed(2)}m`, M[0], M[1]);
+    // Its own name if it has one, cut short so a long one doesn't run across the plan.
+    const own = pr.name?.trim();
+    const name = own ? (own.length > 26 ? `${own.slice(0, 25)}…` : own) : tr(pr.label ?? "Box");
+    ctx.fillText(`${name} · ${pr.size[1].toFixed(2)}m`, M[0], M[1]);
   });
+
+  // The line of action between the first two people: dashed, so it reads as a guide, not a thing.
+  const line = lineOfAction(p);
+  if (line) {
+    const a = S(...line[0]);
+    const b = S(...line[1]);
+    ctx.save();
+    ctx.setLineDash([6, 5]);
+    ctx.strokeStyle = "rgba(255,120,90,0.55)";
+    ctx.lineWidth = 1.25;
+    ctx.beginPath();
+    ctx.moveTo(a[0], a[1]);
+    ctx.lineTo(b[0], b[1]);
+    ctx.stroke();
+    ctx.restore();
+    // Named a little way past stand-in 2, where it's clear of the marks.
+    ctx.fillStyle = "rgba(255,120,90,0.8)";
+    ctx.fillText(tr("180° line"), b[0] + (a[0] - b[0]) * 0.3, b[1] + (a[1] - b[1]) * 0.3 - 9);
+  }
 
   // Stand-in walks.
   (p.actors ?? []).forEach((a, i) => {

@@ -6,6 +6,8 @@
 import { Box } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { CameraPath } from "@/lib/cinema/camera";
+import { lightFromOf } from "@/lib/cinema/looks";
+import { useStudio } from "../state";
 import type { Handle } from "./planGeometry";
 import type { Plan3D as Scene, Plan3DHooks } from "./plan3dScene";
 import { tr } from "@/i18n";
@@ -41,10 +43,11 @@ export function Plan3D({
   const labels = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
   // The scene reads the latest props each frame, and calls back through the latest handlers.
-  const state = useRef({ path, editable, sel, aspect, inset });
+  const light = useStudio((s) => lightFromOf(s.shot));
+  const state = useRef({ path, editable, sel, aspect, inset, light });
   const hooks = useRef<Plan3DHooks>({ select: onSelect, grab: onGrab, move: onMove });
   useEffect(() => {
-    state.current = { path, editable, sel, aspect, inset };
+    state.current = { path, editable, sel, aspect, inset, light };
     hooks.current = { select: onSelect, grab: onGrab, move: onMove };
   });
 

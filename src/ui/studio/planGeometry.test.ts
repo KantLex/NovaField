@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CameraKey } from "@/lib/cinema/camera";
 import type { CustomRig } from "@/lib/cinema/custom";
-import { addPoint, facePoint, FACE_REACH, handles, keyLabel, rayToHeight, rayToLevel, removeActor, sameTurn, scaleBox, toScreen, toWorld, turnToward } from "./planGeometry";
+import { addPoint, facePoint, FACE_REACH, handles, keyLabel, rayToHeight, rayToLevel, lineOfAction, removeActor, sameTurn, scaleBox, toScreen, toWorld, turnToward } from "./planGeometry";
 
 const key = (t: number, x: number, z: number): CameraKey => ({ t, pos: [x, 1.5, z], target: [0, 1, 0], fov: 40, roll: 0 });
 const rig = (keys: CameraKey[], extra: Partial<CustomRig> = {}): CustomRig => ({ keys, ease: "linear", actors: [], follow: null, ...extra });
@@ -94,5 +94,20 @@ describe("turns", () => {
     expect(sameTurn(180, -180)).toBe(true);
     expect(sameTurn(-90, 270)).toBe(true);
     expect(sameTurn(0, 5)).toBe(false);
+  });
+});
+
+describe("the line of action", () => {
+  const path = (actors: { from: [number, number]; to: [number, number]; height: number }[]) => ({ version: 1 as const, frames: 24, fps: 24, ease: "linear" as const, keys: [], actors });
+  it("runs through stand-ins 1 and 2, out past both", () => {
+    const line = lineOfAction(path([{ from: [-1, 0], to: [-1, 0], height: 1.75 }, { from: [1, 0], to: [1, 0], height: 1.75 }]))!;
+    expect(line[0][0]).toBeLessThan(-5);
+    expect(line[1][0]).toBeGreaterThan(5);
+    expect(line[0][1]).toBe(0);
+    expect(line[1][1]).toBe(0);
+  });
+  it("needs two people apart", () => {
+    expect(lineOfAction(path([{ from: [0, 0], to: [0, 0], height: 1.75 }]))).toBeNull();
+    expect(lineOfAction(path([{ from: [0, 0], to: [0, 0], height: 1.75 }, { from: [0.1, 0], to: [0.1, 0], height: 1.75 }]))).toBeNull();
   });
 });
