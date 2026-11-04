@@ -108,6 +108,65 @@ def test_cancel_drops_a_queued_file(tiny):
     assert wait(d, "tiny.safetensors")["installed"]
 
 
+def test_a_file_queued_as_the_worker_stops_still_downloads(tiny):
+    d, root, _ = tiny
+    # The worker found the queue empty and is on its way out, but its thread hasn't ended yet.
+    stopping = __import__("threading").Event()
+    d.worker = __import__("threading").Thread(target=stopping.wait)
+    d.worker.start()
+    d.worker = None  # what _run leaves as it stops, under the lock
+    try:
+        assert d.start(["tiny.safetensors"]) == ["tiny.safetensors"]
+        assert wait(d, "tiny.safetensors")["installed"]
+    finally:
+        stopping.set()
+    assert d.worker is None
+
+
+def test_cancel_then_download_again_does_not_revive_the_cancelled_transfer(tiny):
+    d, root, asked = tiny
+    first = __import__("threading").Event()
+    go_on = __import__("threading").Event()
+
+    class Slow(Response):
+        def read(self, n=-1):
+            first.set()
+            go_on.wait(2)
+            return super().read(1)  # a byte at a time, so the cancel lands mid-file
+
+    d.open = lambda req: (asked.append(req), Slow(BODY))[1]
+    d.start(["tiny.safetensors"])
+    assert first.wait(2)
+    old = d.jobs["tiny.safetensors"]
+    d.cancel("tiny.safetensors")
+    d.start(["tiny.safetensors"])  # a fresh record while the old transfer is still reading
+    go_on.set()
+    f = wait(d, "tiny.safetensors")
+    assert old["state"] == "cancelled"
+    assert f["installed"] and (root / "loras" / "tiny.safetensors").read_bytes() == BODY
+    # The cancelled transfer stopped; the second one fetched the file once, from the start.
+    assert len(asked) == 2 and asked[1].get_header("Range") is None
+
+
+def test_a_whole_part_is_renamed_without_asking_again(tiny):
+    d, root, asked = tiny
+    (root / "loras").mkdir()
+    (root / "loras" / ("tiny.safetensors" + models.PART)).write_bytes(BODY)
+    d.start(["tiny.safetensors"])
+    assert wait(d, "tiny.safetensors")["job"] == {"state": "done", "done": len(BODY), "total": len(BODY)}
+    assert not asked and (root / "loras" / "tiny.safetensors").read_bytes() == BODY
+
+
+def test_a_part_bigger_than_the_file_starts_over(tiny):
+    d, root, asked = tiny
+    (root / "loras").mkdir()
+    (root / "loras" / ("tiny.safetensors" + models.PART)).write_bytes(BODY + b"extra")
+    d.start(["tiny.safetensors"])
+    assert wait(d, "tiny.safetensors")["installed"]
+    assert asked[0].get_header("Range") is None
+    assert (root / "loras" / "tiny.safetensors").read_bytes() == BODY
+
+
 def test_routes_in_a_real_server(monkeypatch, tmp_path):
     """The routes as ComfyUI would serve them: aiohttp, with stand-ins for ComfyUI's own modules."""
     aiohttp = pytest.importorskip("aiohttp")

@@ -396,7 +396,6 @@
   "Download {size}": "下载（{size}）",
   "Download ComfyUI graph": "下载 ComfyUI 节点图",
   "Download MP4": "下载 MP4",
-  "Downloaded": "已下载",
   "Downloading {model} on your ComfyUI PC.": "正在你的 ComfyUI 电脑上下载 {model}。",
   "Downloading on your ComfyUI PC. You can keep working; it unlocks when it's done.": "正在你的 ComfyUI 电脑上下载。你可以继续工作，下载完成就会解锁。",
   "Downloading…": "下载中…",

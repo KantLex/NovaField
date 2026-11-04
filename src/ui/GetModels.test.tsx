@@ -58,6 +58,26 @@ describe("getting a model's files", () => {
     expect(screen.queryByRole("button", { name: /Download/ })).toBeNull();
   });
 
+  it("asks again when the PC couldn't be reached, while a panel is on screen", async () => {
+    // A fresh copy of the module: the tests above leave its poll timer running.
+    vi.resetModules();
+    const { GetModels, useModels } = await import("./GetModels");
+    vi.useFakeTimers();
+    try {
+      let up = false;
+      vi.stubGlobal("fetch", async () => (up ? Response.json(status()) : Response.json({ error: "offline" }, { status: 502 })));
+      const { unmount } = render(<GetModels name="Wan 2.1 ATI" files={files} />);
+      await act(async () => void (await vi.advanceTimersByTimeAsync(0)));
+      expect(useModels.getState().status).toBeNull();
+      up = true;
+      await act(async () => void (await vi.advanceTimersByTimeAsync(10_000)));
+      expect(screen.getByRole("button", { name: /Download 17\.1 GB/ })).toBeTruthy();
+      unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("stays out of the way on Comfy Cloud and when nothing is missing", () => {
     act(() => useModels.setState({ status: status({ cloud: true }) }));
     const { container, rerender } = render(<GetModels name="Wan 2.1 ATI" files={files} />);

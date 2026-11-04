@@ -13,6 +13,7 @@ import { MODEL_FILES } from "@/lib/modelFiles";
 import { MODEL_SETS } from "@/lib/modelSets";
 
 let pack = true;
+let listsRead = 0;
 const asked: unknown[] = [];
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://x");
@@ -20,7 +21,7 @@ const server = createServer(async (req, res) => {
     res.writeHead(status, { "content-type": "application/json" });
     res.end(JSON.stringify(body));
   };
-  if (url.pathname === "/object_info") return json({ UNETLoader: { input: { required: { unet_name: [[MODELS.wanVace], {}] } }, output: ["MODEL"] } });
+  if (url.pathname === "/object_info") return listsRead++, json({ UNETLoader: { input: { required: { unet_name: [[MODELS.wanVace], {}] } }, output: ["MODEL"] } });
   if (!pack) return json({ error: "not found" }, 404);
   if (url.pathname === "/novafield/models")
     return json({
@@ -67,6 +68,15 @@ describe("model files", () => {
     expect(s.files[MODELS.sam3].installed).toBe(true); // just downloaded
     expect(s.files[MODELS.scail]).toEqual({ installed: false, job: { state: "downloading", done: 5, total: 10 } });
     expect(s.files[MODELS.wanAti].installed).toBe(false);
+  });
+
+  it("re-reads ComfyUI's lists once for a file that arrived, not on every poll", async () => {
+    // The pack says SAM3 is in place, but ComfyUI's list doesn't show it (a folder no loader reads).
+    listsRead = 0;
+    await modelsStatus(); // the lists thrown away by the call before are read again
+    await modelsStatus();
+    await modelsStatus();
+    expect(listsRead).toBe(1);
   });
 
   it("asks the nodes for known files only, as JSON", async () => {

@@ -198,7 +198,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
         className="sticky top-0 z-40 flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-line/60 bg-surround/95 px-4 py-2.5 backdrop-blur sm:px-6"
         // Leaving the page from the header asks first when an editor has unsaved changes.
         onClickCapture={(e) => {
-          const href = (e.target as HTMLElement).closest("a[href]")?.getAttribute("href");
+          const a = (e.target as HTMLElement).closest<HTMLAnchorElement>("a[href]");
+          const href = a?.getAttribute("href");
+          // A new tab keeps this page and its edits, and another site gets the browser's own
+          // leave-page prompt: only links within the app, opened here, ask.
+          if (!a || a.target === "_blank" || a.origin !== location.origin || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
           if (href && href !== path && hasUnsaved()) {
             e.preventDefault();
             e.stopPropagation();

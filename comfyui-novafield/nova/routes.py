@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from .models import Downloads
 
-VERSION = "0.5.0"
+VERSION = "0.5.1"
 
 
 def register():

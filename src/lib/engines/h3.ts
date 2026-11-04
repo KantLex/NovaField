@@ -8,7 +8,7 @@ import type { Capabilities } from "./capabilities";
 import { filmSupport, MODELS } from "./capabilities";
 import { composeShotPrompt, resolveMentions } from "./prompt";
 import { H3_FPS, h3FramesAtMost, nearestAspect, planH3, QUALITY, sizeFor } from "./sizing";
-import type { FilmLab, RecastSpec, ReplaceSpec, RestyleSpec, ShotSpec } from "./specs";
+import type { BoxKey, FilmLab, RecastSpec, ReplaceSpec, RestyleSpec, ShotSpec } from "./specs";
 import { say } from "@/lib/say";
 
 /** The note when a moving shot goes out without its previs (the ghost rig); the prompt bar offers to turn it on. */
@@ -376,6 +376,20 @@ export function compileRecastOrRestyle(spec: RecastSpec | RestyleSpec, caps: Cap
 }
 
 /**
+ * Boxes drawn on the whole source frame, moved into the part a center crop to the take's shape
+ * keeps (H3 sizes snap to the nearest preset aspect, so a little of the frame may be cut).
+ */
+export function cropKeys(keys: BoxKey[], source: { width?: number; height?: number }, size: { width: number; height: number }): BoxKey[] {
+  const from = (source.width ?? 16) / (source.height ?? 9);
+  const to = size.width / size.height;
+  // The share of the source's width (or height) the crop keeps.
+  const fx = from > to ? to / from : 1;
+  const fy = from < to ? from / to : 1;
+  if (fx === 1 && fy === 1) return keys;
+  return keys.map((k) => ({ f: k.f, x: (k.x - (1 - fx) / 2) / fx, y: (k.y - (1 - fy) / 2) / fy, w: k.w / fx, h: k.h / fy }));
+}
+
+/**
  * Replace on H3: the Fun ControlNet repaints only inside the tracked box (the rest is the source,
  * frame for frame), and reference-to-video draws what goes there from the words and the picture.
  */
@@ -388,11 +402,14 @@ export function compileReplaceH3(spec: ReplaceSpec, caps: Capabilities): Compile
 
   const src = g.add("LoadVideo", { file: spec.source.name }, "Source clip");
   const parts = g.add("GetVideoComponents", { video: src.out() });
-  const frames = g.add("ImageScale", { image: parts.out(0), upscale_method: "lanczos", width: plan.width, height: plan.height, crop: "center" }).out();
+  // The take is plan.frames long (H3 counts in 17s), so the clip the ControlNet follows is cut to
+  // match, frame for frame with the mask.
+  const cut = g.add("ImageFromBatch", { image: parts.out(0), batch_index: 0, length: plan.frames }).out();
+  const frames = g.add("ImageScale", { image: cut, upscale_method: "lanczos", width: plan.width, height: plan.height, crop: "center" }).out();
   const track = g.add(
     "NovaBoxTrackMask",
     {
-      track: JSON.stringify({ shape: spec.shape, keys: spec.keys }),
+      track: JSON.stringify({ shape: spec.shape, keys: cropKeys(spec.keys, spec.source, plan) }),
       width: plan.width,
       height: plan.height,
       frames: plan.frames,

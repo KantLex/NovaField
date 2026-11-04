@@ -396,7 +396,6 @@
   "Download {size}": "내려받기 ({size})",
   "Download ComfyUI graph": "ComfyUI 그래프 다운로드",
   "Download MP4": "MP4 다운로드",
-  "Downloaded": "내려받음",
   "Downloading {model} on your ComfyUI PC.": "ComfyUI PC에 {model}을(를) 내려받는 중이에요.",
   "Downloading on your ComfyUI PC. You can keep working; it unlocks when it's done.": "ComfyUI PC에 내려받는 중이에요. 계속 작업해도 되고, 끝나면 잠금이 풀려요.",
   "Downloading…": "내려받는 중…",

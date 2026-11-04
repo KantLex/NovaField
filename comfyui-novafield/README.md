@@ -36,6 +36,7 @@ The pack isn't on the Comfy Registry yet, so searching for it in Manager or inst
 
 | Version | What's new |
 |---|---|
+| 0.5.1 | Model downloads: a file asked for just as the last one finished now starts; cancelling and asking again no longer finishes the cancelled transfer and fetches the file twice; a part left whole, or bigger than the file, no longer fails every retry |
 | 0.5.0 | Model downloads for the NovaField app: it can fetch the files its features need into this ComfyUI's model folders, with progress, resume and cancel (see below) |
 | 0.4.2 | `NovaShutter`: with the shutter closed, a frame halfway between two sub-frames now takes the later one, so frames stay evenly spaced (Python's `round()` alternated) |
 | 0.4.1 | Test fix only (the fixture check now allows last-digit float differences between platforms) |

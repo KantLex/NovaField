@@ -80,11 +80,15 @@ function ModelPicker({ caps }: { caps?: Capabilities }) {
     // Already cut for it.
     if (slot && same(from, slot)) return g.set({ models, ...sound, ...keys(slot) });
     setCutting(m.key);
+    const mode = g.mode;
     try {
       const clip = await api.trim(from, m.clip, from.source.start);
-      useG
-        .getState()
-        .set({ models, ...sound, ...(m.clip === "h3" ? { h3Source: clip } : { wanSource: clip }), ...clearedBy({ models }, m.clip), ...keys(clip) });
+      // The cut takes a while: build on what's chosen now, and drop it if the clip it was cut from
+      // has been swapped meanwhile.
+      const now = useG.getState();
+      if ((current.clip === "h3" ? now.h3Source : now.wanSource) !== from) return;
+      const latest = { ...now.models, [mode]: m.key };
+      now.set({ models: latest, ...sound, ...(m.clip === "h3" ? { h3Source: clip } : { wanSource: clip }), ...clearedBy({ models: latest }, m.clip), ...keys(clip) });
     } catch (e) {
       fail(e);
     } finally {
@@ -137,7 +141,9 @@ function ModelPicker({ caps }: { caps?: Capabilities }) {
       </select>
       {cutting && <p className="text-[12px] text-dim">{tr("Cutting the clip for it…")}</p>}
       {picked?.blurb && <p className="text-[12px] leading-snug text-dim">{picked.blurb}</p>}
-      {caps && current.id !== "workflow" && !henshinReady(g.mode, current.id, caps) && <NotReady name={current.name} files={current.files} />}
+      {caps && current.id !== "workflow" && !henshinReady(g.mode, current.id, caps) && (
+        <NotReady name={current.name} files={current.files} packMissing={g.mode === "replace" && !caps.pack.boxTrack} />
+      )}
       {recipe && (
         <>
           <p className="text-[12px] text-dim">{tr(WORKFLOW_NOTE[g.mode])}</p>
@@ -174,7 +180,7 @@ function ModelPicker({ caps }: { caps?: Capabilities }) {
  * A model the server can't run yet: its missing files, to download from here; or, when the files
  * are all there, the nodes it still lacks.
  */
-function NotReady({ name, files }: { name: string; files: string[] }) {
+function NotReady({ name, files, packMissing }: { name: string; files: string[]; packMissing: boolean }) {
   const status = useModels((s) => s.status);
   const missing = useMissing(files);
   if (!status || !missing) return null;
@@ -185,7 +191,9 @@ function NotReady({ name, files }: { name: string; files: string[] }) {
         <span className="[overflow-wrap:anywhere]">
           {status.cloud
             ? tr("{model} is not installed on the server. It needs: {files}.", { model: name, files: files.join(", ") })
-            : tr("{model}'s files are on your ComfyUI PC, but its nodes aren't. Update ComfyUI, then restart it.", { model: name })}
+            : packMissing
+              ? tr("Replace needs the NovaField nodes (NovaBoxTrackMask). Install the pack to unlock it.")
+              : tr("{model}'s files are on your ComfyUI PC, but its nodes aren't. Update ComfyUI, then restart it.", { model: name })}
         </span>
       </Locked>
     );

@@ -33,6 +33,13 @@ async function packStatus(): Promise<PackStatus | null> {
   }
 }
 
+/**
+ * Files the pack has put in place that ComfyUI's lists didn't show yet, each re-read for once. A
+ * file ComfyUI never lists (in a folder no loader reads) would otherwise throw the lists away on
+ * every poll.
+ */
+const reread = new Set<string>();
+
 export async function modelsStatus(): Promise<ModelsStatus> {
   if (isCloud()) return { cloud: true, pack: null, files: {} };
   const [info, pack] = await Promise.all([objectInfo().catch(() => ({}) as ObjectInfo), packStatus()]);
@@ -42,7 +49,11 @@ export async function modelsStatus(): Promise<ModelsStatus> {
   for (const name of Object.keys(MODEL_FILES)) {
     const p = pack?.files[name];
     files[name] = { installed: there.has(name) || !!p?.installed, ...(p?.job ? { job: p.job } : {}) };
-    if (p?.installed && !there.has(name)) arrived = true;
+    if (!p?.installed || there.has(name)) reread.delete(name);
+    else if (!reread.has(name)) {
+      reread.add(name);
+      arrived = true;
+    }
   }
   // A download finished since ComfyUI's lists were read: read them again, so the feature unlocks.
   if (arrived) forgetObjectInfo();

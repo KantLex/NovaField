@@ -396,7 +396,6 @@
   "Download {size}": "ダウンロード（{size}）",
   "Download ComfyUI graph": "ComfyUI グラフをダウンロード",
   "Download MP4": "MP4 をダウンロード",
-  "Downloaded": "ダウンロード済み",
   "Downloading {model} on your ComfyUI PC.": "ComfyUI の PC に {model} をダウンロードしています。",
   "Downloading on your ComfyUI PC. You can keep working; it unlocks when it's done.": "ComfyUI の PC にダウンロード中です。作業を続けられます。完了すると使えるようになります。",
   "Downloading…": "ダウンロード中…",

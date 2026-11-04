@@ -5,7 +5,7 @@
 // links and the folder each file goes in.
 
 import clsx from "clsx";
-import { Check, Download, ExternalLink, LoaderCircle, X } from "lucide-react";
+import { Download, ExternalLink, LoaderCircle, X } from "lucide-react";
 import { useEffect } from "react";
 import { create } from "zustand";
 import { MODEL_FILES, type ModelsStatus } from "@/lib/modelFiles";
@@ -15,6 +15,8 @@ import { useLive, type ServerStatus } from "./state";
 import { numberFormat, tr } from "@/i18n";
 
 const POLL_MS = 1500;
+/** When the status couldn't be read (the PC off or busy starting), how soon to ask again. */
+const RETRY_MS = 10_000;
 
 /** One status for every Get models panel on the page; it polls while anything downloads. */
 export const useModels = create<{ status: ModelsStatus | null; load: () => Promise<void> }>((set, get) => ({
@@ -36,11 +38,14 @@ export const useModels = create<{ status: ModelsStatus | null; load: () => Promi
 const busy = (s: ModelsStatus | null) => !!s && Object.values(s.files).some((f) => f.job?.state === "queued" || f.job?.state === "downloading");
 
 let timer: ReturnType<typeof setTimeout> | null = null;
+/** Panels on screen that want the status: while any is, a status that couldn't be read is asked for again. */
+let watching = 0;
 function poll() {
   if (timer) return;
   const tick = async () => {
     await useModels.getState().load();
-    timer = busy(useModels.getState().status) ? setTimeout(tick, POLL_MS) : null;
+    const { status } = useModels.getState();
+    timer = busy(status) ? setTimeout(tick, POLL_MS) : !status && watching > 0 ? setTimeout(tick, RETRY_MS) : null;
   };
   timer = setTimeout(tick, 0);
 }
@@ -57,6 +62,10 @@ export const formatBytes = (n: number) => {
 /** What the server has and what's downloading, loaded the first time anything asks. */
 export function useModelsStatus(): ModelsStatus | null {
   const status = useModels((s) => s.status);
+  useEffect(() => {
+    watching++;
+    return () => void watching--;
+  }, []);
   useEffect(() => {
     if (!status) poll();
   }, [status]);
@@ -119,9 +128,7 @@ export function GetModels({ name, files, className }: { name: string; files: str
                     f
                   )}
                 </span>
-                {job?.state === "done" ? (
-                  <Check size={13} className="shrink-0 text-ok" aria-label={tr("Downloaded")} />
-                ) : running ? (
+                {running ? (
                   <button onClick={() => void cancel(f)} className="shrink-0 rounded p-0.5 text-dim hover:bg-raised hover:text-ink" aria-label={tr("Cancel {file}", { file: f })}>
                     <X size={12} />
                   </button>

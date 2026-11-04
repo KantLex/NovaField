@@ -396,7 +396,6 @@
   "Download {size}": "ดาวน์โหลด {size}",
   "Download ComfyUI graph": "ดาวน์โหลดกราฟ ComfyUI",
   "Download MP4": "ดาวน์โหลด MP4",
-  "Downloaded": "ดาวน์โหลดแล้ว",
   "Downloading {model} on your ComfyUI PC.": "กำลังดาวน์โหลด {model} ลงพีซี ComfyUI",
   "Downloading on your ComfyUI PC. You can keep working; it unlocks when it's done.": "กำลังดาวน์โหลดลงพีซี ComfyUI ทำงานต่อได้เลย เสร็จแล้วจะปลดล็อก",
   "Downloading…": "กำลังดาวน์โหลด…",

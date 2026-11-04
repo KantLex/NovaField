@@ -4,7 +4,7 @@ import packInfo from "../../test/fixtures/pack_info.json";
 import henshinInfo from "../../test/fixtures/henshin_models_info.json";
 import { validateGraph, type ObjectInfo } from "../comfy/validate";
 import { detectCapabilities, MODELS } from "./capabilities";
-import { NEWER_STOCK_NOTE, RIG_OFF_NOTE } from "./h3";
+import { cropKeys, NEWER_STOCK_NOTE, RIG_OFF_NOTE } from "./h3";
 import { HENSHIN_MODELS } from "./henshinModels";
 import { blocker, compile } from "./index";
 import { h3Frames, h3FramesAtMost, planH3 } from "./sizing";
@@ -400,6 +400,26 @@ describe("Henshin models", () => {
     const ati = Object.values(run(3).graph).find((n) => (n as { class_type: string }).class_type === "WanTrackToVideo") as { inputs: Record<string, unknown> };
     expect(ati.inputs.topk).toBe(10);
     expect(types(run(3).graph)).not.toContain("WanMoveTrackToVideo");
+  });
+
+  it("H3 Replace follows exactly as many source frames as the mask and the take have", () => {
+    const { graph, meta } = compile({ ...(specs[2][1] as JobSpec & { kind: "replace" }), source: vid("5s.mp4", 120) }, caps);
+    const node = (t: string) => Object.values(graph).find((n) => (n as { class_type: string }).class_type === t) as { inputs: Record<string, unknown> };
+    // 5 s at 24 fps (120 frames) makes a 107-frame take: H3 counts in 17s, plus 5.
+    expect(meta.frames).toBe(107);
+    expect(node("ImageFromBatch").inputs).toMatchObject({ batch_index: 0, length: 107 });
+    expect(node("NovaBoxTrackMask").inputs.frames).toBe(107);
+  });
+
+  it("H3 Replace moves the boxes into the part of the frame the crop keeps", () => {
+    const key = { f: 0, x: 0.25, y: 0.25, w: 0.5, h: 0.5 };
+    // Same shape: nothing moves.
+    expect(cropKeys([key], { width: 1280, height: 720 }, { width: 1280, height: 720 })).toEqual([key]);
+    // A 2:1 source cropped to 16:9 loses (1 − 8/9) of its width, half on each side.
+    const [k] = cropKeys([key], { width: 1440, height: 720 }, { width: 1280, height: 720 });
+    expect(k.x + k.w / 2).toBeCloseTo(0.5);
+    expect(k.w).toBeCloseTo(0.5 / (8 / 9));
+    expect([k.y, k.h]).toEqual([0.25, 0.5]);
   });
 
   it("SCAIL-2 cuts the clip to its 32-pixel steps and says what it can't do", () => {

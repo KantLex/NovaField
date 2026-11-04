@@ -75,7 +75,9 @@ class Downloads:
                 self.jobs[name] = {"state": "queued", "done": 0, "total": CATALOG[name]["size"]}
                 self.queue.append(name)
                 queued.append(name)
-            if queued and not (self.worker and self.worker.is_alive()):
+            # The worker clears itself under this lock as it stops, so a file queued just as it
+            # finds the queue empty still gets one.
+            if queued and (self.worker is None or not self.worker.is_alive()):
                 self.worker = threading.Thread(target=self._run, name="novafield-models", daemon=True)
                 self.worker.start()
         return queued
@@ -96,21 +98,25 @@ class Downloads:
         while True:
             with self.lock:
                 if not self.queue:
+                    self.worker = None
                     return
                 name = self.queue.pop(0)
-                self.jobs[name]["state"] = "downloading"
+                # This download's own record: asking for the file again after a cancel makes a new
+                # one, and must not bring the cancelled transfer back to life.
+                job = self.jobs[name]
+                job["state"] = "downloading"
             try:
-                self._download(name)
+                self._download(name, job)
             except Exception as e:  # noqa: BLE001 - reported to the app as it is
                 with self.lock:
-                    if self.jobs[name]["state"] != "cancelled":
-                        self.jobs[name].update(state="failed", error=str(e)[:300])
+                    if job["state"] != "cancelled":
+                        job.update(state="failed", error=str(e)[:300])
 
-    def _cancelled(self, name: str) -> bool:
+    def _cancelled(self, job: dict) -> bool:
         with self.lock:
-            return self.jobs[name]["state"] == "cancelled"
+            return job["state"] == "cancelled"
 
-    def _download(self, name: str):
+    def _download(self, name: str, job: dict):
         entry = CATALOG[name]
         url = entry["url"]
         if not url.startswith(ALLOWED_PREFIX):
@@ -118,9 +124,23 @@ class Downloads:
         target = self.target(name)
         if target is None:
             raise RuntimeError(f"This ComfyUI has no '{entry['folder']}' model folder. Update ComfyUI and try again.")
+        if target.is_file():  # it arrived another way while this one waited
+            with self.lock:
+                job["state"] = "done"
+            return
         target.parent.mkdir(parents=True, exist_ok=True)
         part = target.with_name(target.name + PART)
         have = part.stat().st_size if part.exists() else 0
+        if have == entry["size"]:
+            # A part left whole (stopped just before it was renamed): nothing more to fetch.
+            os.replace(part, target)
+            with self.lock:
+                job.update(state="done", done=have)
+            return
+        if have > entry["size"]:
+            # Not this file (the list changed since): a range past its end would be refused.
+            part.unlink()
+            have = 0
         free = shutil.disk_usage(target.parent).free
         if entry["size"] - have > free:
             raise RuntimeError(f"Not enough disk space: {name} needs {(entry['size'] - have) / 1e9:.1f} GB, {free / 1e9:.1f} GB free.")
@@ -132,22 +152,22 @@ class Downloads:
         if have and status != 206:
             have = 0  # the server sent the whole file: start over
         with self.lock:
-            self.jobs[name]["done"] = have
+            job["done"] = have
         with open(part, "ab" if have else "wb") as out:
             while True:
-                if self._cancelled(name):
+                if self._cancelled(job):
                     break
                 chunk = res.read(CHUNK)
                 if not chunk:
                     break
                 out.write(chunk)
                 with self.lock:
-                    self.jobs[name]["done"] += len(chunk)
+                    job["done"] += len(chunk)
         close = getattr(res, "close", None)
         if close:
             close()
 
-        if self._cancelled(name):
+        if self._cancelled(job):
             part.unlink(missing_ok=True)
             return
         got = part.stat().st_size
@@ -156,4 +176,4 @@ class Downloads:
             raise RuntimeError(f"The download stopped at {got / 1e9:.2f} of {entry['size'] / 1e9:.2f} GB. Try again to carry on.")
         os.replace(part, target)
         with self.lock:
-            self.jobs[name]["state"] = "done"
+            job["state"] = "done"
